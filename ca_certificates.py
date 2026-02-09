@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NetApp ONTAP SVM Creation and Configuration Script
+NetApp ONTAP Certificate Management Script
 
-This script automates the creation and configuration of Storage Virtual Machines (SVMs)
-on NetApp ONTAP systems using the NetApp ONTAP REST API Python Client Library.
+This script automates certificate management operations on NetApp ONTAP systems
+using the NetApp ONTAP REST API Python Client Library.
 
 Features:
-    - SVM creation with custom parameters
-    - FCP service configuration
-    - Multiple network interfaces (FCP LIFs)
-    - Management interface creation
-    - Protocol configuration
+    - Certificate Signing Request (CSR) generation
+    - Private key pair generation
+    - Subject Alternative Names (SAN) configuration
+    - Extended key usage configuration
     - Comprehensive error handling and validation
 
 Requirements:
@@ -39,10 +38,10 @@ from datetime import datetime
 # SCRIPT INITIALIZATION
 # ============================================================================
 print("\n" + "="*70)
-print("  NetApp ONTAP FCP SVM Creation Script")
+print("  NetApp ONTAP Certificate Management Script")
 print("  Using NetApp ONTAP Python Client Library")
 print("="*70)
-print("\n[*] Initializing SVM creation workflow...")
+print("\n[*] Initializing Certificate Signing Request workflow...")
 
 
 # ============================================================================
@@ -246,6 +245,227 @@ def cluster_connection(cluster_config):
 # CA CERTIFICATES MANAGEMENT FUNCTIONS
 # ============================================================================
 
+def csr_generate(cert_config):
+    """
+    Genera un Certificate Signing Request (CSR) y un par de claves privadas
+    
+    Esta función utiliza la API REST de NetApp ONTAP para generar un CSR
+    que puede ser enviado a una Autoridad de Certificación (CA) para
+    obtener un certificado digital firmado.
+    
+    Args:
+        cert_config: Diccionario con los parámetros del certificado:
+            - common_name: Nombre común (FQDN) del certificado
+            - size: Tamaño de la clave en bits (ej: 2048)
+            - algorithm: Algoritmo de cifrado (ej: 'RSA')
+            - hash_function: Función hash (ej: 'SHA256')
+            - extended_key_usage: Lista de usos extendidos (ej: ['serverAuth', 'clientAuth'])
+            - country: Código del país (ej: 'ES')
+            - state: Estado o provincia (ej: 'CORUNA')
+            - locality: Localidad o ciudad (ej: 'CORUNA')
+            - dns_name: Nombre DNS alternativo del certificado
+            - organization: Organización (opcional)
+            - organizational_unit: Unidad organizativa (opcional)
+            - email: Email de contacto (opcional)
+    
+    Returns:
+        bool: True si el CSR se generó exitosamente, False si hubo error
+    """
+    try:
+        from netapp_ontap.resources import SecurityConfig
+        
+        print(f"\n[*] Generating Certificate Signing Request (CSR)...")
+        
+        # Validar campos requeridos mínimos
+        required_fields = ['common_name', 'size', 'algorithm', 'hash_function', 
+                          'country', 'state', 'locality']
+        missing_fields = [field for field in required_fields if field not in cert_config]
+        
+        if missing_fields:
+            print(f"[ERROR] Missing required fields in certificate config: {', '.join(missing_fields)}")
+            return False
+        
+        # Construir el subject_name en formato Distinguished Name (DN)
+        # Formato: C=ES,ST=CORUNA,L=CORUNA,O=Organization,OU=Unit,CN=common-name
+        subject_parts = []
+        subject_parts.append(f"C={cert_config['country']}")
+        subject_parts.append(f"ST={cert_config['state']}")
+        subject_parts.append(f"L={cert_config['locality']}")
+        
+        if 'organization' in cert_config:
+            subject_parts.append(f"O={cert_config['organization']}")
+        
+        if 'organizational_unit' in cert_config:
+            subject_parts.append(f"OU={cert_config['organizational_unit']}")
+        
+        subject_parts.append(f"CN={cert_config['common_name']}")
+        
+        subject_name = ','.join(subject_parts)
+        
+        # Construir el body del request para el CSR
+        csr_body = {
+            'algorithm': cert_config['algorithm'].lower(),  # rsa, ec
+            'security_strength': str(cert_config['size']),  # Tamaño de la clave en bits
+            'hash_function': cert_config['hash_function'].lower(),  # sha256, sha384, sha512
+            'subject_name': subject_name
+        }
+        
+        # Agregar extended_key_usage si está presente
+        if 'extended_key_usage' in cert_config and cert_config['extended_key_usage']:
+            # Convertir a minúsculas: serverAuth, clientAuth, etc.
+            csr_body['extended_key_usage'] = [usage.lower() for usage in cert_config['extended_key_usage']]
+        
+        # Agregar subject alternatives (DNS, email, IP, URI)
+        subject_alternatives = {}
+        
+        if 'dns_name' in cert_config and cert_config['dns_name']:
+            # Puede ser una lista o un string
+            dns_names = cert_config['dns_name'] if isinstance(cert_config['dns_name'], list) else [cert_config['dns_name']]
+            subject_alternatives['dns'] = dns_names
+        
+        if 'email' in cert_config and cert_config['email']:
+            emails = cert_config['email'] if isinstance(cert_config['email'], list) else [cert_config['email']]
+            subject_alternatives['email'] = emails
+        
+        if 'ip' in cert_config and cert_config['ip']:
+            ips = cert_config['ip'] if isinstance(cert_config['ip'], list) else [cert_config['ip']]
+            subject_alternatives['ip'] = ips
+        
+        if 'uri' in cert_config and cert_config['uri']:
+            uris = cert_config['uri'] if isinstance(cert_config['uri'], list) else [cert_config['uri']]
+            subject_alternatives['uri'] = uris
+        
+        if subject_alternatives:
+            csr_body['subject_alternatives'] = subject_alternatives
+        
+        # Agregar key_usage si está presente
+        if 'key_usage' in cert_config and cert_config['key_usage']:
+            csr_body['key_usage'] = [usage.lower() for usage in cert_config['key_usage']]
+        
+        # Mostrar resumen de la configuración
+        print(f"[+] Certificate details:")
+        print(f"    - Common Name: {cert_config['common_name']}")
+        print(f"    - Subject: {subject_name}")
+        print(f"    - Algorithm: {cert_config['algorithm']}")
+        print(f"    - Key Size: {cert_config['size']} bits")
+        print(f"    - Hash Function: {cert_config['hash_function']}")
+        
+        if 'extended_key_usage' in csr_body:
+            print(f"    - Extended Key Usage: {', '.join(csr_body['extended_key_usage'])}")
+        
+        if subject_alternatives:
+            if 'dns' in subject_alternatives:
+                print(f"    - DNS Names: {', '.join(subject_alternatives['dns'])}")
+        
+        # POST: Generar el CSR usando SecurityConfig
+        print(f"\n[*] Calling NetApp API to generate CSR...")
+        
+        security_config = SecurityConfig()
+        response = security_config.certificate_signing_request(body=csr_body)
+        
+        # Verificar la respuesta
+        if response.http_response.status_code == 200 or response.http_response.status_code == 201:
+            print(f"[+] CSR generated successfully!")
+            
+            # Extraer el CSR y la clave privada de la respuesta
+            response_data = response.http_response.json()
+            
+            csr_data = {
+                'subject_name': subject_name,
+                'algorithm': cert_config['algorithm'],
+                'key_size': cert_config['size'],
+                'hash_function': cert_config['hash_function'],
+                'request_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            # Agregar el CSR si está en la respuesta
+            if 'signing_request' in response_data:
+                csr_data['signing_request'] = response_data['signing_request']
+                print(f"\n[+] Certificate Signing Request (CSR):")
+                print(f"{'='*70}")
+                print(response_data['signing_request'])
+                print(f"{'='*70}")
+                
+                # Guardar CSR en archivo .txt
+                try:
+                    import os
+                    csr_dir = 'csr_certificates'
+                    if not os.path.exists(csr_dir):
+                        os.makedirs(csr_dir)
+                    
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    csr_filename = os.path.join(csr_dir, f'certificate_request_{timestamp}.txt')
+                    
+                    with open(csr_filename, 'w') as f:
+                        f.write(response_data['signing_request'])
+                    
+                    print(f"[+] CSR saved to: {csr_filename}")
+                
+                except Exception as e:
+                    print(f"[WARNING] Failed to save CSR to file: {str(e)}")
+            
+            # Agregar la clave privada si está en la respuesta
+            if 'private_key' in response_data:
+                csr_data['private_key'] = response_data['private_key']
+                print(f"\n[+] Private Key:")
+                print(f"{'='*70}")
+                print(response_data['private_key'])
+                print(f"{'='*70}")
+                print(f"\n[WARNING] Store the private key securely! It will be needed later.")
+                
+                # Guardar clave privada en archivo .txt
+                try:
+                    import os
+                    csr_dir = 'csr_certificates'
+                    if not os.path.exists(csr_dir):
+                        os.makedirs(csr_dir)
+                    
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    key_filename = os.path.join(csr_dir, f'private_key_{timestamp}.txt')
+                    
+                    with open(key_filename, 'w') as f:
+                        f.write(response_data['private_key'])
+                    
+                    print(f"[+] Private Key saved to: {key_filename}")
+                    print(f"[WARNING] Keep this file secure and delete it after use!")
+                
+                except Exception as e:
+                    print(f"[WARNING] Failed to save private key to file: {str(e)}")
+            
+            # Guardar en log JSON
+            save_to_log('certificate_csr', csr_data)
+            
+            return True
+        else:
+            print(f"[ERROR] Unexpected response status: {response.http_response.status_code}")
+            return False
+    
+    # CONTROL DE ERRORES
+    except NetAppRestError as error:
+        print(f"[ERROR] NetApp API error during CSR generation")
+        print(f"[ERROR] HTTP Status: {error.status_code}")
+        
+        if error.status_code == 400:
+            print(f"[ERROR] Bad request - Check certificate parameters")
+        elif error.status_code == 403:
+            print(f"[ERROR] Forbidden - Insufficient permissions")
+        
+        if error.http_err_response and error.http_err_response.http_response:
+            print(f"[ERROR] Details: {error.http_err_response.http_response.text}")
+        else:
+            print(f"[ERROR] Details: {str(error)}")
+        
+        return False
+    
+    except KeyError as e:
+        print(f"[ERROR] Configuration error - Missing key in response: {str(e)}")
+        return False
+    
+    except Exception as e:
+        print(f"[ERROR] Unexpected error during CSR generation: {type(e).__name__}")
+        print(f"[ERROR] Details: {str(e)}")
+        return False
+
 
 
 # ============================================================================
@@ -321,37 +541,132 @@ def get_event_logs(max_records=100):
         print(f"[ERROR] Details: {str(e)}")
         return False
 
+
 # ============================================================================
-# CALLING WORKFLOW
+# MENU FUNCTIONS
 # ============================================================================
 
-# CONFIG YAML LOADER
-# Cargar la configuración desde el archivo YAML
-config_data = config_loader()
-
-# Verificar que la configuración se cargó exitosamente
-if config_data is None:
-    print("\n[ERROR] Cannot continue without valid configuration")
-    print("[ERROR] Check the config.yaml file and try again")
-    exit(1)
-else:
-    print("\n[SUCCESS] Configuration loaded - Proceeding with pre-checks")
-
-# CLUSTER CONNECTION CHECK
-# Establecer conexión y verificar acceso a la cabina NetApp
-if not cluster_connection(config_data['cluster']):
-    print("\n[ERROR] Failed to connect to NetApp cluster")
-    print("[ERROR] Fix connection issues before continuing")
-    exit(1)
-
-print("\n[+] All pre-checks passed - Ready to create AQoS policies")
+def display_menu():
+    """
+    Muestra el menú principal de opciones
+    """
+    print("\n" + "="*70)
+    print("  CERTIFICATE MANAGEMENT MENU")
+    print("="*70)
+    print("\n[1] Generate Certificate Signing Request (CSR)")
+    print("[0] Exit")
+    print("\n" + "="*70)
 
 
+def execute_option(option, config_data):
+    """
+    Ejecuta la opción seleccionada del menú
+    
+    Args:
+        option: Número de opción seleccionada
+        config_data: Diccionario con la configuración cargada
+    
+    Returns:
+        bool: True para continuar con el menú, False para salir
+    """
+    if option == "1":
+        # CERTIFICATE SIGNING REQUEST (CSR) GENERATION
+        if 'certificate' not in config_data:
+            print("\n[ERROR] No certificate configuration found in config.yaml")
+            print("[ERROR] Add a 'certificate' section with the required parameters")
+            return True
+        
+        print("\n[*] Starting CSR generation workflow...")
+        if csr_generate(config_data['certificate']):
+            print("\n[SUCCESS] Certificate Signing Request generated successfully!")
+            print("[+] The CSR and private key have been saved to the logs/ directory")
+            print("[+] Submit the CSR to your Certificate Authority to obtain a signed certificate")
+        else:
+            print("\n[ERROR] Failed to generate Certificate Signing Request")
+            print("[ERROR] Check the error messages above and try again")
+        
+        return True
+    
+    elif option == "0":
+        print("\n[*] Exiting script...")
+        return False
+    
+    else:
+        print("\n[WARNING] Invalid option. Please select a valid option.")
+        return True
 
 
-# Obtener event logs de la cabina como backup final
-print("\n[*] Final event logs backup...")
-if get_event_logs(max_records=100):
-    print("\n[SUCCESS] Event logs backup completed!")
-else:
-    print("\n[WARNING] Event logs backup failed (non-critical)")
+# ============================================================================
+# MAIN FUNCTION
+# ============================================================================
+
+def main():
+    """
+    Función principal del script
+    
+    Ejecuta el flujo completo:
+    1. Carga la configuración
+    2. Establece conexión con el cluster
+    3. Muestra menú de opciones
+    4. Ejecuta la opción seleccionada
+    """
+    # CONFIG YAML LOADER
+    # Cargar la configuración desde el archivo YAML
+    config_data = config_loader()
+    
+    # Verificar que la configuración se cargó exitosamente
+    if config_data is None:
+        print("\n[ERROR] Cannot continue without valid configuration")
+        print("[ERROR] Check the config.yaml file and try again")
+        exit(1)
+    else:
+        print("\n[SUCCESS] Configuration loaded - Proceeding with pre-checks")
+    
+    # CLUSTER CONNECTION CHECK
+    # Establecer conexión y verificar acceso a la cabina NetApp
+    if not cluster_connection(config_data['cluster']):
+        print("\n[ERROR] Failed to connect to NetApp cluster")
+        print("[ERROR] Fix connection issues before continuing")
+        exit(1)
+    
+    print("\n[+] All pre-checks passed - Ready for certificate operations")
+    
+    # MENU LOOP
+    # Mostrar menú y ejecutar opciones hasta que el usuario decida salir
+    continue_menu = True
+    while continue_menu:
+        display_menu()
+        
+        try:
+            option = input("\nSelect an option: ").strip()
+            continue_menu = execute_option(option, config_data)
+        
+        except KeyboardInterrupt:
+            print("\n\n[*] Operation cancelled by user")
+            print("[*] Exiting script...")
+            break
+        
+        except Exception as e:
+            print(f"\n[ERROR] Unexpected error: {type(e).__name__}")
+            print(f"[ERROR] Details: {str(e)}")
+            continue_menu = True
+    
+    # FINAL CLEANUP
+    # Obtener event logs de la cabina como backup final
+    print("\n[*] Final event logs backup...")
+    if get_event_logs(max_records=100):
+        print("\n[SUCCESS] Event logs backup completed!")
+    else:
+        print("\n[WARNING] Event logs backup failed (non-critical)")
+    
+    print("\n[*] Script execution completed")
+    print("="*70 + "\n")
+
+
+# ============================================================================
+# SCRIPT ENTRY POINT
+# ============================================================================
+
+if __name__ == "__main__":
+    main()
+

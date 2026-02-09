@@ -15,5 +15,27 @@ cluster:
 svm:
   name: svm_1_cluster
 
-
-
+# CERTIFICATE SIGNING REQUEST (CSR) SETTINGS
+certificate:
+  common_name: SVMv2-XXXXXX-RHOSO_COR_NAS01-NAS.es-north-1.cc.vdc.adm
+  size: 2048
+  algorithm: RSA
+  hash_function: SHA256
+  extended_key_usage:
+    - serverAuth
+    - clientAuth
+  country: ES
+  state: CORUNA
+  locality: CORUNA
+  dns_name: SVMv2-XXXXXX-RHOSO_COR_NAS01-NAS.es-north-1.cc.vdc.adm
+  # Optional fields:
+  # organization: My Organization
+  # organizational_unit: IT Department
+  # email: admin@example.com
+  # ip: 
+  #   - 10.0.0.1
+  # uri:
+  #   - https://example.com
+  # key_usage:
+  #   - digitalSignature
+  #   - keyEncipherment
