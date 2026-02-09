@@ -302,10 +302,20 @@ def csr_generate(cert_config):
         
         subject_name = ','.join(subject_parts)
         
+        # Convertir tamaño de clave a security_strength (bits de seguridad)
+        # Mapeo: 2048 bits → 112, 3072 bits → 128, 7680 bits → 192
+        key_size = int(cert_config['size'])
+        if key_size <= 2048:
+            security_strength = 112
+        elif key_size <= 3072:
+            security_strength = 128
+        else:
+            security_strength = 192
+        
         # Construir el body del request para el CSR
         csr_body = {
             'algorithm': cert_config['algorithm'].lower(),  # rsa, ec
-            'security_strength': int(cert_config['size']),  # Tamaño de la clave en bits (como entero)
+            'security_strength': security_strength,  # Bits de fortaleza de seguridad
             'hash_function': cert_config['hash_function'].lower(),  # sha256, sha384, sha512
             'subject_name': subject_name
         }

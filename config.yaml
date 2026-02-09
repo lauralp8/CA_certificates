@@ -17,8 +17,8 @@ svm:
 
 # CERTIFICATE SIGNING REQUEST (CSR) SETTINGS
 certificate:
-  common_name: SVMv2-XXXXXX-RHOSO_COR_NAS01-NAS.es-north-1.cc.vdc.adm
-  size: 2048
+  common_name: cert
+  size: 2048  # Key size in bits (2048, 3072, 4096)
   algorithm: RSA
   hash_function: SHA256
   extended_key_usage:
@@ -27,7 +27,7 @@ certificate:
   country: ES
   state: CORUNA
   locality: CORUNA
-  dns_name: SVMv2-XXXXXX-RHOSO_COR_NAS01-NAS.es-north-1.cc.vdc.adm
+  dns_name: certificate
   # Optional fields:
   # organization: My Organization
   # organizational_unit: IT Department
