@@ -320,10 +320,8 @@ def csr_generate(cert_config):
             'subject_name': subject_name
         }
         
-        # Agregar extended_key_usage si está presente
-        if 'extended_key_usage' in cert_config and cert_config['extended_key_usage']:
-            # Convertir a minúsculas: serverAuth, clientAuth, etc.
-            csr_body['extended_key_usage'] = [usage.lower() for usage in cert_config['extended_key_usage']]
+        # Nota: extended_key_usage no está soportado en certificate_signing_request API
+        # Se debe configurar al instalar el certificado firmado
         
         # Agregar subject alternatives (DNS, email, IP, URI)
         subject_alternatives = {}
