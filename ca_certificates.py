@@ -385,6 +385,9 @@ def csr_generate(cert_config):
             # Extraer el CSR y la clave privada de la respuesta
             response_data = response.http_response.json()
             
+            # DEBUG: Mostrar las claves disponibles en la respuesta
+            print(f"[DEBUG] Response keys: {list(response_data.keys())}")
+            
             csr_data = {
                 'subject_name': subject_name,
                 'algorithm': cert_config['algorithm'],
@@ -393,12 +396,19 @@ def csr_generate(cert_config):
                 'request_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             
-            # Agregar el CSR si está en la respuesta
-            if 'signing_request' in response_data:
-                csr_data['signing_request'] = response_data['signing_request']
+            # Buscar el CSR en diferentes posibles nombres de campo
+            csr_content = None
+            for key in ['signing_request', 'certificate_signing_request', 'csr', 'request']:
+                if key in response_data:
+                    csr_content = response_data[key]
+                    print(f"[DEBUG] Found CSR in field: {key}")
+                    break
+            
+            if csr_content:
+                csr_data['signing_request'] = csr_content
                 print(f"\n[+] Certificate Signing Request (CSR):")
                 print(f"{'='*70}")
-                print(response_data['signing_request'])
+                print(csr_content)
                 print(f"{'='*70}")
                 
                 # Guardar CSR en archivo .txt
@@ -407,19 +417,28 @@ def csr_generate(cert_config):
                     csr_filename = os.path.join(csr_dir, f'certificate_request_{timestamp}.txt')
                     
                     with open(csr_filename, 'w') as f:
-                        f.write(response_data['signing_request'])
+                        f.write(csr_content)
                     
                     print(f"[+] CSR saved to: {csr_filename}")
                 
                 except Exception as e:
                     print(f"[WARNING] Failed to save CSR to file: {str(e)}")
+            else:
+                print(f"[WARNING] CSR not found in response")
             
-            # Agregar la clave privada si está en la respuesta
-            if 'private_key' in response_data:
-                csr_data['private_key'] = response_data['private_key']
+            # Buscar la clave privada en diferentes posibles nombres de campo
+            private_key_content = None
+            for key in ['private_key', 'key', 'privateKey']:
+                if key in response_data:
+                    private_key_content = response_data[key]
+                    print(f"[DEBUG] Found private key in field: {key}")
+                    break
+            
+            if private_key_content:
+                csr_data['private_key'] = private_key_content
                 print(f"\n[+] Private Key:")
                 print(f"{'='*70}")
-                print(response_data['private_key'])
+                print(private_key_content)
                 print(f"{'='*70}")
                 print(f"\n[WARNING] Store the private key securely! It will be needed later.")
                 
@@ -429,13 +448,15 @@ def csr_generate(cert_config):
                     key_filename = os.path.join(csr_dir, f'private_key_{timestamp}.txt')
                     
                     with open(key_filename, 'w') as f:
-                        f.write(response_data['private_key'])
+                        f.write(private_key_content)
                     
                     print(f"[+] Private Key saved to: {key_filename}")
                     print(f"[WARNING] Keep this file secure and delete it after use!")
                 
                 except Exception as e:
                     print(f"[WARNING] Failed to save private key to file: {str(e)}")
+            else:
+                print(f"[WARNING] Private key not found in response")
             
             # Guardar metadata en JSON en el mismo directorio
             try:
