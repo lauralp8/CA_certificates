@@ -11,5 +11,9 @@ cluster:
   username: admin
   password: "Netapp1!"
 
+# STORAGE VIRTUAL MACHINE (SVM) SETTINGS
+svm:
+  name: svm_1_cluster
+
 
 
