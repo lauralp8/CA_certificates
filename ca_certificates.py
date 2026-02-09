@@ -587,7 +587,7 @@ def execute_option(option, config_data):
         print("\n[*] Starting CSR generation workflow...")
         if csr_generate(config_data['certificate']):
             print("\n[SUCCESS] Certificate Signing Request generated successfully!")
-            print("[+] The CSR and private key have been saved to the logs/ directory")
+            print("[+] The CSR and private key have been saved to the csr_certificates/ directory")
             print("[+] Submit the CSR to your Certificate Authority to obtain a signed certificate")
         else:
             print("\n[ERROR] Failed to generate Certificate Signing Request")
