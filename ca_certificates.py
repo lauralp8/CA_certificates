@@ -27,7 +27,7 @@ Version: 1.0.0
 # IMPORTS
 # ============================================================================
 from netapp_ontap import config, HostConnection, NetAppRestError
-from netapp_ontap.resources import Cluster, EmsEvent, QosPolicy
+from netapp_ontap.resources import Cluster, EmsEvent
 import yaml
 import json
 import os
