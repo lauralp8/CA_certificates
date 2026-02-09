@@ -448,25 +448,13 @@ def csr_generate(cert_config):
                         if private_key_content:
                             f.write("Private Key:\n")
                             f.write(private_key_content)
+                            f.write("\n")
                     
                     print(f"\n[+] Certificate and Private Key saved to: {combined_filename}")
                     print(f"[WARNING] Keep this file secure and delete it after use!")
                 
                 except Exception as e:
                     print(f"[WARNING] Failed to save certificate files: {str(e)}")
-            
-            # Guardar metadata en JSON en el mismo directorio
-            try:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                json_filename = os.path.join(csr_dir, f'certificate_csr_{timestamp}.json')
-                
-                with open(json_filename, 'w', encoding='utf-8') as json_file:
-                    json.dump(csr_data, json_file, indent=2, ensure_ascii=False)
-                
-                print(f"[+] Certificate metadata saved to: {json_filename}")
-            
-            except Exception as e:
-                print(f"[WARNING] Failed to save metadata to JSON: {str(e)}")
             
             return True
         else:
