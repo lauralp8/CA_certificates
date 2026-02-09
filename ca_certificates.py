@@ -404,28 +404,6 @@ def csr_generate(cert_config):
                     print(f"[DEBUG] Found CSR in field: {key}")
                     break
             
-            if csr_content:
-                csr_data['signing_request'] = csr_content
-                print(f"\n[+] Certificate Signing Request (CSR):")
-                print(f"{'='*70}")
-                print(csr_content)
-                print(f"{'='*70}")
-                
-                # Guardar CSR en archivo .txt
-                try:
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    csr_filename = os.path.join(csr_dir, f'certificate_request_{timestamp}.txt')
-                    
-                    with open(csr_filename, 'w') as f:
-                        f.write(csr_content)
-                    
-                    print(f"[+] CSR saved to: {csr_filename}")
-                
-                except Exception as e:
-                    print(f"[WARNING] Failed to save CSR to file: {str(e)}")
-            else:
-                print(f"[WARNING] CSR not found in response")
-            
             # Buscar la clave privada en diferentes posibles nombres de campo
             private_key_content = None
             for key in ['private_key', 'key', 'privateKey']:
@@ -434,6 +412,17 @@ def csr_generate(cert_config):
                     print(f"[DEBUG] Found private key in field: {key}")
                     break
             
+            # Mostrar y guardar el CSR
+            if csr_content:
+                csr_data['signing_request'] = csr_content
+                print(f"\n[+] Certificate Signing Request (CSR):")
+                print(f"{'='*70}")
+                print(csr_content)
+                print(f"{'='*70}")
+            else:
+                print(f"[WARNING] CSR not found in response")
+            
+            # Mostrar la clave privada
             if private_key_content:
                 csr_data['private_key'] = private_key_content
                 print(f"\n[+] Private Key:")
@@ -441,22 +430,30 @@ def csr_generate(cert_config):
                 print(private_key_content)
                 print(f"{'='*70}")
                 print(f"\n[WARNING] Store the private key securely! It will be needed later.")
-                
-                # Guardar clave privada en archivo .txt
+            else:
+                print(f"[WARNING] Private key not found in response")
+            
+            # Guardar CSR y Private Key en un solo archivo .txt
+            if csr_content or private_key_content:
                 try:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    key_filename = os.path.join(csr_dir, f'private_key_{timestamp}.txt')
+                    combined_filename = os.path.join(csr_dir, f'certificate_and_key_{timestamp}.txt')
                     
-                    with open(key_filename, 'w') as f:
-                        f.write(private_key_content)
+                    with open(combined_filename, 'w') as f:
+                        if csr_content:
+                            f.write("Certificate Signing Request:\n")
+                            f.write(csr_content)
+                            f.write("\n\n")
+                        
+                        if private_key_content:
+                            f.write("Private Key:\n")
+                            f.write(private_key_content)
                     
-                    print(f"[+] Private Key saved to: {key_filename}")
+                    print(f"\n[+] Certificate and Private Key saved to: {combined_filename}")
                     print(f"[WARNING] Keep this file secure and delete it after use!")
                 
                 except Exception as e:
-                    print(f"[WARNING] Failed to save private key to file: {str(e)}")
-            else:
-                print(f"[WARNING] Private key not found in response")
+                    print(f"[WARNING] Failed to save certificate files: {str(e)}")
             
             # Guardar metadata en JSON en el mismo directorio
             try:
