@@ -1,0 +1,15 @@
+# ============================================================================
+# NETAPP ONTAP CONFIGURATION FILE
+# ============================================================================
+# Configuration file for NetApp ONTAP automation scripts
+# Version: 1.0.0
+# ============================================================================
+
+# CLUSTER CONNECTION SETTINGS
+cluster:
+  host: cluster1.demo.netapp.com            
+  username: admin
+  password: "Netapp1!"
+
+
+
