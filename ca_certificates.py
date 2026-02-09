@@ -406,7 +406,7 @@ def csr_generate(cert_config):
             
             # Buscar la clave privada en diferentes posibles nombres de campo
             private_key_content = None
-            for key in ['private_key', 'key', 'privateKey']:
+            for key in ['generated_private_key', 'private_key', 'key', 'privateKey']:
                 if key in response_data:
                     private_key_content = response_data[key]
                     print(f"[DEBUG] Found private key in field: {key}")
