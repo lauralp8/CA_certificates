@@ -559,7 +559,8 @@ def display_menu():
     print("  CERTIFICATE MANAGEMENT MENU")
     print("="*70)
     print("\n[1] Generate Certificate Signing Request (CSR)")
-    print("[0] Exit")
+    print("[0] Exit (with event logs backup)")
+    print("[9] Exit without logs")
     print("\n" + "="*70)
 
 
@@ -595,6 +596,10 @@ def execute_option(option, config_data):
     elif option == "0":
         print("\n[*] Exiting script...")
         return False
+    
+    elif option == "9":
+        print("\n[*] Exiting script without logs backup...")
+        return "exit_no_logs"
     
     else:
         print("\n[WARNING] Invalid option. Please select a valid option.")
@@ -639,12 +644,19 @@ def main():
     # MENU LOOP
     # Mostrar menú y ejecutar opciones hasta que el usuario decida salir
     continue_menu = True
+    skip_logs = False
     while continue_menu:
         display_menu()
         
         try:
             option = input("\nSelect an option: ").strip()
-            continue_menu = execute_option(option, config_data)
+            result = execute_option(option, config_data)
+            
+            if result == "exit_no_logs":
+                skip_logs = True
+                continue_menu = False
+            else:
+                continue_menu = result
         
         except KeyboardInterrupt:
             print("\n\n[*] Operation cancelled by user")
@@ -657,12 +669,13 @@ def main():
             continue_menu = True
     
     # FINAL CLEANUP
-    # Obtener event logs de la cabina como backup final
-    print("\n[*] Final event logs backup...")
-    if get_event_logs(max_records=100):
-        print("\n[SUCCESS] Event logs backup completed!")
-    else:
-        print("\n[WARNING] Event logs backup failed (non-critical)")
+    # Obtener event logs de la cabina como backup final (si no se eligió exit sin logs)
+    if not skip_logs:
+        print("\n[*] Final event logs backup...")
+        if get_event_logs(max_records=100):
+            print("\n[SUCCESS] Event logs backup completed!")
+        else:
+            print("\n[WARNING] Event logs backup failed (non-critical)")
     
     print("\n[*] Script execution completed")
     print("="*70 + "\n")
