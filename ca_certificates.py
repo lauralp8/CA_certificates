@@ -375,6 +375,13 @@ def csr_generate(cert_config):
         if response.http_response.status_code == 200 or response.http_response.status_code == 201:
             print(f"[+] CSR generated successfully!")
             
+            # Crear directorio para certificados si no existe
+            import os
+            csr_dir = 'csr_certificates'
+            if not os.path.exists(csr_dir):
+                os.makedirs(csr_dir)
+                print(f"[+] Created directory: {csr_dir}/")
+            
             # Extraer el CSR y la clave privada de la respuesta
             response_data = response.http_response.json()
             
@@ -396,11 +403,6 @@ def csr_generate(cert_config):
                 
                 # Guardar CSR en archivo .txt
                 try:
-                    import os
-                    csr_dir = 'csr_certificates'
-                    if not os.path.exists(csr_dir):
-                        os.makedirs(csr_dir)
-                    
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     csr_filename = os.path.join(csr_dir, f'certificate_request_{timestamp}.txt')
                     
@@ -423,11 +425,6 @@ def csr_generate(cert_config):
                 
                 # Guardar clave privada en archivo .txt
                 try:
-                    import os
-                    csr_dir = 'csr_certificates'
-                    if not os.path.exists(csr_dir):
-                        os.makedirs(csr_dir)
-                    
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     key_filename = os.path.join(csr_dir, f'private_key_{timestamp}.txt')
                     
