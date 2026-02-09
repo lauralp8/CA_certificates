@@ -437,8 +437,18 @@ def csr_generate(cert_config):
                 except Exception as e:
                     print(f"[WARNING] Failed to save private key to file: {str(e)}")
             
-            # Guardar en log JSON
-            save_to_log('certificate_csr', csr_data)
+            # Guardar metadata en JSON en el mismo directorio
+            try:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                json_filename = os.path.join(csr_dir, f'certificate_csr_{timestamp}.json')
+                
+                with open(json_filename, 'w', encoding='utf-8') as json_file:
+                    json.dump(csr_data, json_file, indent=2, ensure_ascii=False)
+                
+                print(f"[+] Certificate metadata saved to: {json_filename}")
+            
+            except Exception as e:
+                print(f"[WARNING] Failed to save metadata to JSON: {str(e)}")
             
             return True
         else:
