@@ -305,7 +305,7 @@ def csr_generate(cert_config):
         # Construir el body del request para el CSR
         csr_body = {
             'algorithm': cert_config['algorithm'].lower(),  # rsa, ec
-            'security_strength': str(cert_config['size']),  # Tamaño de la clave en bits
+            'security_strength': int(cert_config['size']),  # Tamaño de la clave en bits (como entero)
             'hash_function': cert_config['hash_function'].lower(),  # sha256, sha384, sha512
             'subject_name': subject_name
         }
