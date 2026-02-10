@@ -1,0 +1,12 @@
+# ============================================================================
+# Python Dependencies for NetApp ONTAP Certificate Management
+# ============================================================================
+
+# NetApp ONTAP REST API Client Library
+netapp-ontap>=9.14.0
+
+# YAML Configuration File Parser
+PyYAML>=6.0
+
+# HTTP Library for REST API calls
+requests>=2.31.0
