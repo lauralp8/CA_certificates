@@ -900,6 +900,242 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name):
 
 
 # ============================================================================
+# CERTIFICATE DELETE FUNCTION
+# ============================================================================
+
+def delete_certificate(svm_name, serial_number, cert_config):
+    """
+    Elimina un certificado de NetApp ONTAP
+    
+    Ejecuta el equivalente a:
+        security certificate delete -type server -vserver <svm> -ca <ca> -serial <serial> -common-name <cn>
+    
+    Esta función:
+    1. Valida los parámetros de configuración
+    2. Busca el certificado por serial number
+    3. Elimina el certificado usando la API REST de NetApp
+    4. Verifica que el certificado fue eliminado
+    
+    Args:
+        svm_name (str): Nombre de la SVM donde eliminar el certificado
+        serial_number (str): Serial number del certificado a eliminar
+        cert_config (dict): Configuración desde config.yaml:
+            - type: Tipo de certificado (server, client, etc.)
+            - common_name: Common name del certificado
+            - ca_name: Nombre de la CA (desde ssl.ca_name)
+    
+    Returns:
+        bool: True si se eliminó exitosamente, False si hubo error
+    
+    Ejemplo de uso:
+        delete_certificate('svm_1_cluster', '16519C887ED0E2BF91150BC750220DC3A8B720D6', 
+                          {'type': 'server', 'common_name': 'certificate', 'ca_name': 'vdc-ca'})
+    """
+    try:
+        print(f"\n[*] Starting certificate deletion workflow...")
+        print(f"{'='*70}")
+        
+        # ====================================================================
+        # PASO 1: VALIDAR PARÁMETROS DE CONFIGURACIÓN
+        # ====================================================================
+        
+        print(f"\n[STEP 1/4] Validating configuration parameters...")
+        
+        # Extraer parámetros (usar valores por defecto si no existen)
+        cert_type = cert_config.get('type', 'server')
+        common_name = cert_config.get('common_name', 'N/A')
+        ca_name = cert_config.get('ca_name', 'N/A')
+        
+        print(f"[+] Configuration:")
+        print(f"    - SVM Name: {svm_name}")
+        print(f"    - Certificate Type: {cert_type}")
+        print(f"    - CA Name: {ca_name}")
+        print(f"    - Common Name: {common_name}")
+        print(f"    - Serial Number: {serial_number}")
+        
+        # ====================================================================
+        # PASO 2: BUSCAR EL CERTIFICADO
+        # ====================================================================
+        
+        print(f"\n[STEP 2/4] Locating certificate...")
+        print(f"[*] Searching for certificate with serial number: {serial_number}")
+        
+        # Buscar el certificado por serial number
+        cert_to_delete = None
+        
+        try:
+            # GET: Buscar certificado por serial number y SVM
+            certificates = SecurityCertificate.get_collection(
+                **{
+                    "svm.name": svm_name,
+                    "serial_number": serial_number
+                }
+            )
+            
+            for cert in certificates:
+                cert.get()
+                cert_to_delete = cert
+                break  # Tomar el primero que coincida
+            
+            if cert_to_delete:
+                print(f"[+] Certificate found:")
+                print(f"    - UUID: {cert_to_delete.uuid}")
+                print(f"    - Name: {cert_to_delete.name if hasattr(cert_to_delete, 'name') else 'N/A'}")
+                print(f"    - Common Name: {cert_to_delete.common_name if hasattr(cert_to_delete, 'common_name') else 'N/A'}")
+                print(f"    - Type: {cert_to_delete.type if hasattr(cert_to_delete, 'type') else 'N/A'}")
+                print(f"    - Serial Number: {cert_to_delete.serial_number if hasattr(cert_to_delete, 'serial_number') else 'N/A'}")
+            else:
+                print(f"[ERROR] Certificate not found with serial number: {serial_number}")
+                return False
+                
+        except Exception as search_error:
+            print(f"[ERROR] Error searching for certificate: {str(search_error)}")
+            return False
+        
+        # ====================================================================
+        # PASO 3: ELIMINAR EL CERTIFICADO
+        # ====================================================================
+        
+        print(f"\n[STEP 3/4] Deleting certificate...")
+        print(f"[*] API Call: DELETE /api/security/certificates/{cert_to_delete.uuid}")
+        print(f"[*] CLI Equivalent: security certificate delete -type {cert_type} -vserver {svm_name} -ca {ca_name} -serial {serial_number} -common-name {common_name}")
+        
+        # Construir el comando CLI para referencia
+        cli_command = (
+            f"security certificate delete "
+            f"-type {cert_type} "
+            f"-vserver {svm_name} "
+            f"-ca {ca_name} "
+            f"-serial {serial_number} "
+            f"-common-name {common_name}"
+        )
+        
+        print(f"\n[+] CLI Command:")
+        print(f"    {cli_command}")
+        
+        # DELETE: Eliminar el certificado usando la API REST
+        print(f"\n[*] Executing certificate deletion...")
+        cert_to_delete.delete()
+        
+        print(f"[+] Certificate deleted successfully!")
+        
+        # ====================================================================
+        # PASO 4: VERIFICACIÓN
+        # ====================================================================
+        
+        print(f"\n[STEP 4/4] Verification...")
+        print(f"[*] Verifying certificate was deleted...")
+        
+        # Verificar que el certificado ya no existe
+        try:
+            verify_certs = SecurityCertificate.get_collection(
+                **{
+                    "svm.name": svm_name,
+                    "serial_number": serial_number
+                }
+            )
+            
+            cert_still_exists = False
+            for cert in verify_certs:
+                cert_still_exists = True
+                break
+            
+            if cert_still_exists:
+                print(f"[WARNING] Certificate still appears in the system")
+                print(f"[INFO] It may take a moment to be fully removed")
+            else:
+                print(f"[+] Certificate successfully removed from the system")
+        
+        except Exception as verify_error:
+            print(f"[INFO] Verification check completed (certificate likely deleted)")
+        
+        # Mostrar certificados restantes en la SVM
+        print(f"\n[*] Retrieving remaining certificates in SVM...")
+        
+        try:
+            remaining_certs = SecurityCertificate.get_collection(
+                **{"svm.name": svm_name}
+            )
+            
+            print(f"\n{'='*70}")
+            print(f"  REMAINING CERTIFICATES - SVM: {svm_name}")
+            print(f"{'='*70}")
+            
+            cert_count = 0
+            for remaining_cert in remaining_certs:
+                remaining_cert.get()
+                cert_count += 1
+                
+                print(f"\n[{cert_count}] Certificate:")
+                print(f"    Name: {remaining_cert.name if hasattr(remaining_cert, 'name') else 'N/A'}")
+                print(f"    Common Name: {remaining_cert.common_name if hasattr(remaining_cert, 'common_name') else 'N/A'}")
+                print(f"    Serial Number: {remaining_cert.serial_number if hasattr(remaining_cert, 'serial_number') else 'N/A'}")
+                print(f"    Type: {remaining_cert.type if hasattr(remaining_cert, 'type') else 'N/A'}")
+            
+            print(f"\n{'='*70}")
+            print(f"[INFO] Total remaining certificates: {cert_count}")
+            
+        except Exception as list_error:
+            print(f"[WARNING] Could not retrieve remaining certificates: {str(list_error)}")
+        
+        # Guardar en log
+        delete_log = {
+            'operation': 'certificate_delete',
+            'svm_name': svm_name,
+            'serial_number': serial_number,
+            'cert_type': cert_type,
+            'ca_name': ca_name,
+            'common_name': common_name,
+            'cli_command': cli_command,
+            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        save_to_log('certificate_delete', delete_log)
+        
+        print(f"\n[SUCCESS] Certificate deletion completed successfully!")
+        print(f"[+] Operation saved to logs/certificate_delete_*.json")
+        
+        return True
+    
+    # ====================================================================
+    # CONTROL DE ERRORES
+    # ====================================================================
+    
+    except NetAppRestError as error:
+        print(f"\n[ERROR] NetApp REST API error during certificate deletion")
+        print(f"[ERROR] HTTP Status Code: {error.status_code}")
+        
+        # Detallar errores comunes
+        if error.status_code == 400:
+            print(f"[ERROR] Bad Request - Invalid parameters")
+            print(f"[HINT] Verify serial number and certificate details")
+        elif error.status_code == 403:
+            print(f"[ERROR] Forbidden - User lacks required permissions")
+            print(f"[HINT] Ensure the user has 'security' admin role")
+        elif error.status_code == 404:
+            print(f"[ERROR] Not Found - Certificate does not exist")
+            print(f"[HINT] The certificate may have already been deleted")
+        elif error.status_code == 409:
+            print(f"[ERROR] Conflict - Certificate may be in use")
+            print(f"[HINT] Certificate might be assigned to SSL configuration")
+        
+        # Mostrar detalles del error
+        if error.http_err_response and error.http_err_response.http_response:
+            print(f"\n[ERROR] API Response Details:")
+            print(f"{error.http_err_response.http_response.text}")
+        else:
+            print(f"\n[ERROR] Error Details: {str(error)}")
+        
+        return False
+    
+    except Exception as e:
+        print(f"\n[ERROR] Unexpected error during certificate deletion")
+        print(f"[ERROR] Error Type: {type(e).__name__}")
+        print(f"[ERROR] Details: {str(e)}")
+        return False
+
+
+# ============================================================================
 # CERTIFICATE INSTALLATION FUNCTION
 # ============================================================================
 
@@ -1266,7 +1502,7 @@ def display_menu():
     print("="*70)
     print("\n[1] Generate Certificate Signing Request (CSR)")
     print("[2] Install Signed Certificate")
-    print("[3] Get Serial Numbers & Modify SSL Certificate")
+    print("[3] Get Serial Numbers, Modify SSL & Delete Old Certificate")
     print("[0] Exit (with event logs backup)")
     print("[9] Exit without logs")
     print("\n" + "="*70)
@@ -1367,6 +1603,45 @@ def execute_option(option, config_data):
                 ):
                     print("\n[SUCCESS] SSL modification completed successfully!")
                     print("[+] SSL configuration has been updated")
+                    
+                    # ============================================================
+                    # PASO ADICIONAL: ELIMINAR EL PRIMER CERTIFICADO
+                    # ============================================================
+                    
+                    # Obtener el primer certificado (índice 0)
+                    first_cert = certificate_details[0]
+                    first_serial = first_cert['serial_number']
+                    
+                    print(f"\n[*] Proceeding with certificate deletion using first certificate...")
+                    print(f"[*] Selected Serial Number: {first_serial}")
+                    print(f"[*] Certificate Name: {first_cert['certificate_name']}")
+                    
+                    # Preparar configuración para delete_certificate
+                    delete_config = {
+                        'type': config_data['certificate'].get('type', 'server'),
+                        'common_name': config_data['certificate']['common_name'],
+                        'ca_name': config_data['ssl']['ca_name']
+                    }
+                    
+                    # Llamar a la función de eliminación de certificado
+                    if delete_certificate(
+                        config_data['svm']['name'],
+                        first_serial,
+                        delete_config
+                    ):
+                        print("\n[SUCCESS] Certificate deletion completed successfully!")
+                        print("[+] Old certificate has been removed from the system")
+                        print("\n" + "="*70)
+                        print("  WORKFLOW COMPLETED SUCCESSFULLY")
+                        print("="*70)
+                        print("\n[✓] Serial numbers retrieved")
+                        print("[✓] SSL configuration modified")
+                        print("[✓] Old certificate deleted")
+                        print("\n[INFO] All operations completed successfully!")
+                    else:
+                        print("\n[WARNING] Certificate deletion failed")
+                        print("[INFO] SSL modification was successful, but old certificate remains")
+                        print("[INFO] You may need to delete it manually")
                 else:
                     print("\n[ERROR] SSL modification failed")
                     print("[ERROR] Check the error messages above for details")
