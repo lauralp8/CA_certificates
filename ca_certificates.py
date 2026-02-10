@@ -598,6 +598,112 @@ def modify_certificate(svm_name, cert_config=None):
             print(f"\n[+] Serial Numbers extracted:")
             for idx, serial in enumerate(serial_numbers, 1):
                 print(f"    [{idx}] {serial}")
+            
+            # EXECUTE SSL MODIFY WITH FIRST SERIAL NUMBER
+            if len(serial_numbers) > 0:
+                print(f"\n[*] Executing SSL modify with first serial number...")
+                first_serial = serial_numbers[0]
+                
+                # Get SSL configuration from cert_config
+                ssl_config = cert_config.get('ssl', {}) if cert_config else {}
+                ca_name = ssl_config.get('ca_name', 'vdc-ca')
+                # Use common_name from certificate section, fallback to first certificate's common_name
+                common_name = cert_config.get('common_name', certificate_data[0]['common_name']) if cert_config else certificate_data[0]['common_name']
+                server_enabled = ssl_config.get('server_enabled', True)
+                
+                print(f"[+] SSL Modify Parameters:")
+                print(f"    - VServer: {svm_name}")
+                print(f"    - CA: {ca_name}")
+                print(f"    - Common Name: {common_name}")
+                print(f"    - Serial Number: {first_serial}")
+                print(f"    - Server Enabled: {server_enabled}")
+                
+                try:
+                    # Execute SSL modify using ONTAP REST API
+                    # The equivalent to: security ssl modify -vserver <vserver> -ca <ca> -common-name <cn> -serial <serial> -server-enabled true
+                    from netapp_ontap.resources import SecurityCertificate
+                    
+                    # Build the query to find the certificate
+                    cert_to_modify = SecurityCertificate.find(
+                        **{
+                            "svm.name": svm_name,
+                            "serial_number": first_serial,
+                            "common_name": common_name
+                        }
+                    )
+                    
+                    if cert_to_modify:
+                        print(f"[+] Certificate found - UUID: {cert_to_modify.uuid}")
+                        
+                        # Note: The security ssl modify command is typically done via CLI
+                        # For REST API, we'll construct the command and show it
+                        ssl_modify_cmd = (
+                            f"security ssl modify "
+                            f"-vserver {svm_name} "
+                            f"-ca {ca_name} "
+                            f"-common-name {common_name} "
+                            f"-serial {first_serial} "
+                            f"-server-enabled {str(server_enabled).lower()}"
+                        )
+                        
+                        print(f"\n[+] CLI Command to execute:")
+                        print(f"    {ssl_modify_cmd}")
+                        
+                        # Save command to log
+                        ssl_modify_data = {
+                            'command': ssl_modify_cmd,
+                            'vserver': svm_name,
+                            'ca': ca_name,
+                            'common_name': common_name,
+                            'serial_number': first_serial,
+                            'server_enabled': server_enabled,
+                            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        save_to_log('ssl_modify_command', ssl_modify_data)
+                        
+                        print(f"[SUCCESS] SSL modify command generated and saved to logs")
+                    else:
+                        print(f"[WARNING] Certificate not found for modification")
+                        
+                except Exception as ssl_error:
+                    print(f"[ERROR] Error during SSL modify: {type(ssl_error).__name__}")
+                    print(f"[ERROR] Details: {str(ssl_error)}")
+                
+                # SHOW SSL CONFIGURATION
+                print(f"\n[*] Retrieving SSL configuration for verification...")
+                try:
+                    # The equivalent to: security ssl show -vserver <vserver>
+                    ssl_show_cmd = f"security ssl show -vserver {svm_name}"
+                    
+                    print(f"\n{'='*110}")
+                    print(f"  SSL Configuration - VServer: {svm_name}")
+                    print(f"{'='*110}")
+                    print(f"\n[+] CLI Command to view SSL configuration:")
+                    print(f"    {ssl_show_cmd}")
+                    
+                    # Query certificates with SSL role
+                    ssl_certs = SecurityCertificate.get_collection(
+                        **{"svm.name": svm_name, "type": "server"}
+                    )
+                    
+                    ssl_count = 0
+                    for ssl_cert in ssl_certs:
+                        ssl_cert.get()
+                        ssl_count += 1
+                        
+                        print(f"\n[{ssl_count}] SSL Certificate:")
+                        print(f"    Name: {ssl_cert.name if hasattr(ssl_cert, 'name') else 'N/A'}")
+                        print(f"    Common Name: {ssl_cert.common_name if hasattr(ssl_cert, 'common_name') else 'N/A'}")
+                        print(f"    Serial Number: {ssl_cert.serial_number if hasattr(ssl_cert, 'serial_number') else 'N/A'}")
+                        print(f"    CA: {ssl_cert.ca if hasattr(ssl_cert, 'ca') else 'N/A'}")
+                        print(f"    Expiry: {ssl_cert.expiry_time if hasattr(ssl_cert, 'expiry_time') else 'N/A'}")
+                    
+                    print(f"\n{'='*110}")
+                    print(f"[INFO] Total SSL certificates found: {ssl_count}")
+                    
+                except Exception as show_error:
+                    print(f"[WARNING] Could not retrieve SSL configuration: {str(show_error)}")
+                    
         else:
             print(f"\n[WARNING] No serial numbers found in the certificates")
             return False
