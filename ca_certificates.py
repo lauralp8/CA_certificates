@@ -27,7 +27,7 @@ Version: 1.0.0
 # IMPORTS
 # ============================================================================
 from netapp_ontap import config, HostConnection, NetAppRestError
-from netapp_ontap.resources import Cluster, EmsEvent, SecurityCertificate
+from netapp_ontap.resources import Cluster, EmsEvent, SecurityCertificate, SecurityAccount
 from netapp_ontap.resources import Svm
 import yaml
 import json
@@ -1416,6 +1416,239 @@ def install_certificate(cert_config, svm_name):
 
 
 # ============================================================================
+# SECURITY LOGIN SHOW FUNCTION
+# ============================================================================
+
+def get_security_login_info(svm_name):
+    """
+    Obtiene la información de security login para una SVM
+    
+    Ejecuta el equivalente a:
+        security login show -vserver <svm>
+    
+    Args:
+        svm_name (str): Nombre de la SVM
+    
+    Returns:
+        bool: True si se obtuvo exitosamente, False si hubo error
+    """
+    try:
+        print(f"\n[*] Retrieving security login information...")
+        print(f"[*] CLI Equivalent: security login show -vserver {svm_name}")
+        
+        # GET: Obtener cuentas de seguridad para la SVM
+        accounts = SecurityAccount.get_collection(
+            **{"owner.name": svm_name}
+        )
+        
+        print(f"\n{'='*70}")
+        print(f"  SECURITY LOGIN SHOW - SVM: {svm_name}")
+        print(f"{'='*70}\n")
+        
+        account_list = []
+        account_count = 0
+        
+        for account in accounts:
+            account.get()
+            account_count += 1
+            
+            print(f"Account #{account_count}:")
+            print(f"{'-'*70}")
+            
+            # Nombre de usuario
+            username = account.name if hasattr(account, 'name') else 'N/A'
+            print(f"Username: {username}")
+            
+            # Aplicación
+            application = account.applications[0].application if hasattr(account, 'applications') and len(account.applications) > 0 else 'N/A'
+            print(f"Application: {application}")
+            
+            # Método de autenticación
+            auth_method = account.applications[0].authentication_methods[0] if hasattr(account, 'applications') and len(account.applications) > 0 and hasattr(account.applications[0], 'authentication_methods') else 'N/A'
+            print(f"Authentication Method: {auth_method}")
+            
+            # Role
+            role = account.role.name if hasattr(account, 'role') and hasattr(account.role, 'name') else 'N/A'
+            print(f"Role: {role}")
+            
+            # Owner (SVM)
+            owner = account.owner.name if hasattr(account, 'owner') and hasattr(account.owner, 'name') else 'N/A'
+            print(f"Owner: {owner}")
+            
+            # Guardar información
+            account_info = {
+                'username': username,
+                'application': application,
+                'authentication_method': str(auth_method),
+                'role': role,
+                'owner': owner
+            }
+            account_list.append(account_info)
+            
+            print("")
+        
+        print(f"{'='*70}")
+        print(f"Total accounts found: {account_count}")
+        print(f"{'='*70}\n")
+        
+        # Guardar en log
+        login_log = {
+            'operation': 'security_login_show',
+            'svm_name': svm_name,
+            'total_accounts': account_count,
+            'accounts': account_list,
+            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        save_to_log('security_login', login_log)
+        
+        print(f"[+] Security login information saved to logs/security_login_*.json")
+        
+        return True
+        
+    except NetAppRestError as error:
+        print(f"\n[ERROR] NetApp REST API error during security login retrieval")
+        print(f"[ERROR] HTTP Status Code: {error.status_code}")
+        
+        if error.http_err_response and error.http_err_response.http_response:
+            print(f"[ERROR] Details: {error.http_err_response.http_response.text}")
+        else:
+            print(f"[ERROR] Details: {str(error)}")
+        
+        return False
+    
+    except Exception as e:
+        print(f"\n[ERROR] Unexpected error during security login retrieval")
+        print(f"[ERROR] Error Type: {type(e).__name__}")
+        print(f"[ERROR] Details: {str(e)}")
+        return False
+
+
+# ============================================================================
+# SECURITY SSL SHOW FUNCTION
+# ============================================================================
+
+def get_security_ssl_info(svm_name):
+    """
+    Obtiene la información de security ssl para una SVM
+    
+    Ejecuta el equivalente a:
+        security ssl show -vserver <svm>
+    
+    Args:
+        svm_name (str): Nombre de la SVM
+    
+    Returns:
+        bool: True si se obtuvo exitosamente, False si hubo error
+    """
+    try:
+        print(f"\n[*] Retrieving security SSL configuration...")
+        print(f"[*] CLI Equivalent: security ssl show -vserver {svm_name}")
+        
+        # GET: Obtener certificados SSL para la SVM
+        ssl_certs = SecurityCertificate.get_collection(
+            **{"svm.name": svm_name}
+        )
+        
+        print(f"\n{'='*70}")
+        print(f"  SECURITY SSL SHOW - SVM: {svm_name}")
+        print(f"{'='*70}\n")
+        
+        ssl_list = []
+        ssl_count = 0
+        
+        for ssl_cert in ssl_certs:
+            ssl_cert.get()
+            ssl_count += 1
+            
+            print(f"SSL Certificate #{ssl_count}:")
+            print(f"{'-'*70}")
+            
+            # Nombre del certificado
+            cert_name = ssl_cert.name if hasattr(ssl_cert, 'name') else 'N/A'
+            print(f"Certificate Name: {cert_name}")
+            
+            # Common Name
+            common_name = ssl_cert.common_name if hasattr(ssl_cert, 'common_name') else 'N/A'
+            print(f"Common Name: {common_name}")
+            
+            # Serial Number
+            serial_number = ssl_cert.serial_number if hasattr(ssl_cert, 'serial_number') else 'N/A'
+            print(f"Serial Number: {serial_number}")
+            
+            # CA
+            ca = ssl_cert.ca if hasattr(ssl_cert, 'ca') else 'N/A'
+            print(f"CA: {ca}")
+            
+            # Type
+            cert_type = ssl_cert.type if hasattr(ssl_cert, 'type') else 'N/A'
+            print(f"Type: {cert_type}")
+            
+            # Expiry Time
+            expiry = str(ssl_cert.expiry_time) if hasattr(ssl_cert, 'expiry_time') else 'N/A'
+            print(f"Expiry Time: {expiry}")
+            
+            # Hash Function
+            hash_func = ssl_cert.hash_function if hasattr(ssl_cert, 'hash_function') else 'N/A'
+            print(f"Hash Function: {hash_func}")
+            
+            # Key Size
+            key_size = f"{ssl_cert.key_size} bits" if hasattr(ssl_cert, 'key_size') else 'N/A'
+            print(f"Key Size: {key_size}")
+            
+            # Guardar información
+            ssl_info = {
+                'certificate_name': cert_name,
+                'common_name': common_name,
+                'serial_number': serial_number,
+                'ca': ca,
+                'type': cert_type,
+                'expiry_time': expiry,
+                'hash_function': hash_func,
+                'key_size': key_size
+            }
+            ssl_list.append(ssl_info)
+            
+            print("")
+        
+        print(f"{'='*70}")
+        print(f"Total SSL certificates found: {ssl_count}")
+        print(f"{'='*70}\n")
+        
+        # Guardar en log
+        ssl_log = {
+            'operation': 'security_ssl_show',
+            'svm_name': svm_name,
+            'total_ssl_certificates': ssl_count,
+            'ssl_certificates': ssl_list,
+            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        save_to_log('security_ssl', ssl_log)
+        
+        print(f"[+] Security SSL information saved to logs/security_ssl_*.json")
+        
+        return True
+        
+    except NetAppRestError as error:
+        print(f"\n[ERROR] NetApp REST API error during security SSL retrieval")
+        print(f"[ERROR] HTTP Status Code: {error.status_code}")
+        
+        if error.http_err_response and error.http_err_response.http_response:
+            print(f"[ERROR] Details: {error.http_err_response.http_response.text}")
+        else:
+            print(f"[ERROR] Details: {str(error)}")
+        
+        return False
+    
+    except Exception as e:
+        print(f"\n[ERROR] Unexpected error during security SSL retrieval")
+        print(f"[ERROR] Error Type: {type(e).__name__}")
+        print(f"[ERROR] Details: {str(e)}")
+        return False
+
+
+# ============================================================================
 # EVENT LOG RETRIEVAL FUNCTION
 # ============================================================================
 
@@ -1628,15 +1861,31 @@ def execute_option(option, config_data):
                         config_data['svm']['name'],
                         first_serial,
                         delete_config
-                    ):
+                    ):                        
                         print("\n[SUCCESS] Certificate deletion completed successfully!")
                         print("[+] Old certificate has been removed from the system")
+                        
+                        # ====================================================
+                        # PASO ADICIONAL: OBTENER SECURITY LOGIN Y SSL INFO
+                        # ====================================================
+                        
+                        print(f"\n[*] Retrieving final security configuration...")
+                        
+                        # Obtener security login show
+                        get_security_login_info(config_data['svm']['name'])
+                        
+                        # Obtener security ssl show
+                        get_security_ssl_info(config_data['svm']['name'])
+                        
+                        # Resumen final
                         print("\n" + "="*70)
                         print("  WORKFLOW COMPLETED SUCCESSFULLY")
                         print("="*70)
                         print("\n[✓] Serial numbers retrieved")
                         print("[✓] SSL configuration modified")
                         print("[✓] Old certificate deleted")
+                        print("[✓] Security login information saved")
+                        print("[✓] Security SSL information saved")
                         print("\n[INFO] All operations completed successfully!")
                     else:
                         print("\n[WARNING] Certificate deletion failed")
