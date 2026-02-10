@@ -608,6 +608,10 @@ def modify_certificate(svm_name, cert_config=None):
             # Obtener configuración SSL (por defecto: true si no se especifica)
             ssl_enabled = cert_config.get('ssl_enabled', True) if cert_config else True
             
+            # DEBUG: Mostrar configuración
+            print(f"\n[DEBUG] cert_config: {cert_config}")
+            print(f"[DEBUG] ssl_enabled value: {ssl_enabled} (type: {type(ssl_enabled)})")
+            
             action = "Enabling" if ssl_enabled else "Disabling"
             print(f"\n[*] Operation 1: {action} SSL for first certificate...")
             print(f"    - Common Name: {certificate_data[0]['common_name']}")
@@ -640,9 +644,12 @@ def modify_certificate(svm_name, cert_config=None):
                 if ssl_enabled:
                     # Habilitar SSL: Asignar certificado
                     payload = {"certificate": {"uuid": certificate_data[0]['uuid']}}
+                    print(f"[DEBUG] Payload to ENABLE SSL: {json.dumps(payload)}")
                 else:
-                    # Deshabilitar SSL: Desasignar certificado (null o {})
-                    payload = {"certificate": None}
+                    # Deshabilitar SSL: Intentar diferentes formatos
+                    # Opción 1: null (None en Python)
+                    payload = {"certificate": {}}
+                    print(f"[DEBUG] Payload to DISABLE SSL: {json.dumps(payload)}")
                 
                 response = requests.patch(
                     url,
@@ -652,10 +659,13 @@ def modify_certificate(svm_name, cert_config=None):
                     headers={'Content-Type': 'application/json'}
                 )
                 
+                print(f"[DEBUG] Response status: {response.status_code}")
+                print(f"[DEBUG] Response body: {response.text[:500] if response.text else 'Empty'}")
+                
                 if response.status_code in [200, 201, 202, 204]:
                     ssl_state = "true" if ssl_enabled else "false"
-                    print(f"[+] SSL configuration updated successfully!")
-                    print(f"[+] SSL Server Authentication Enabled: {ssl_state}")
+                    print(f"[+] SSL configuration update request sent!")
+                    print(f"[+] Expected SSL Server Authentication Enabled: {ssl_state}")
                 else:
                     print(f"[WARNING] SSL modify returned status {response.status_code}")
                     print(f"[WARNING] Response: {response.text}")
