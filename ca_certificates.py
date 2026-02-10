@@ -490,6 +490,137 @@ def csr_generate(cert_config):
 
 
 # ============================================================================
+# CERTIFICATE MODIFICATION FUNCTION
+# ============================================================================
+
+def modify_certificate(svm_name):
+    """
+    Modifica certificados en NetApp ONTAP
+    
+    Equivalente a:
+    security certificate show -vserver <svm> -instance
+    
+    Muestra los certificados de una SVM, filtra los que tienen common_name
+    y certificate_name, y extrae los Serial Numbers.
+    
+    Args:
+        svm_name: Nombre de la SVM para filtrar certificados
+    
+    Returns:
+        bool: True si se ejecutó exitosamente, False si hubo error
+    """
+    try:
+        print(f"\n[*] Starting certificate modification workflow...")
+        print(f"[*] Retrieving certificates for SVM: {svm_name}")
+        
+        # GET: Obtener certificados filtrando por SVM
+        print(f"\n[*] Calling NetApp API to retrieve certificates...")
+        
+        certificates = SecurityCertificate.get_collection(
+            **{"svm.name": svm_name}
+        )
+        
+        print(f"\n{'='*110}")
+        print(f"  Certificate Show - SVM: {svm_name}")
+        print(f"{'='*110}\n")
+        
+        # Lista para almacenar los serial numbers encontrados
+        serial_numbers = []
+        cert_count = 0
+        
+        for cert in certificates:
+            # Obtener detalles completos del certificado
+            cert.get()
+            
+            # Verificar si tiene common_name y name (certificate_name)
+            has_common_name = hasattr(cert, 'common_name') and cert.common_name
+            has_cert_name = hasattr(cert, 'name') and cert.name
+            
+            # Solo procesar certificados que tengan ambos campos
+            if has_common_name and has_cert_name:
+                cert_count += 1
+                
+                print(f"Certificate #{cert_count}:")
+                print(f"{'-'*110}")
+                print(f"Certificate Name: {cert.name}")
+                print(f"Common Name: {cert.common_name}")
+                
+                # Extraer Serial Number si existe
+                if hasattr(cert, 'serial_number') and cert.serial_number:
+                    serial_numbers.append(cert.serial_number)
+                    print(f"Serial Number: {cert.serial_number}")
+                else:
+                    print(f"Serial Number: N/A")
+                
+                # Mostrar información adicional
+                if hasattr(cert, 'type'):
+                    print(f"Type: {cert.type}")
+                
+                if hasattr(cert, 'ca'):
+                    print(f"CA: {cert.ca}")
+                
+                if hasattr(cert, 'expiry_time'):
+                    print(f"Expiry Time: {cert.expiry_time}")
+                
+                if hasattr(cert, 'hash_function'):
+                    print(f"Hash Function: {cert.hash_function}")
+                
+                if hasattr(cert, 'key_size'):
+                    print(f"Key Size: {cert.key_size} bits")
+                
+                print(f"")
+        
+        print(f"{'='*110}")
+        print(f"\nTotal certificates found with Common Name and Certificate Name: {cert_count}")
+        
+        # Imprimir resumen de Serial Numbers
+        if serial_numbers:
+            print(f"\n[+] Serial Numbers extracted:")
+            for idx, serial in enumerate(serial_numbers, 1):
+                print(f"    [{idx}] {serial}")
+        else:
+            print(f"\n[WARNING] No serial numbers found in the certificates")
+        
+        # Guardar información en log
+        cert_log_data = {
+            'svm_name': svm_name,
+            'total_certificates': cert_count,
+            'serial_numbers': serial_numbers,
+            'query_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        save_to_log('certificate_show', cert_log_data)
+        
+        print(f"\n[SUCCESS] Certificate query completed!")
+        
+        return True
+    
+    # CONTROL DE ERRORES
+    except NetAppRestError as error:
+        print(f"[ERROR] NetApp API error during certificate query")
+        print(f"[ERROR] HTTP Status: {error.status_code}")
+        
+        if error.status_code == 400:
+            print(f"[ERROR] Bad request - Check SVM name")
+        elif error.status_code == 403:
+            print(f"[ERROR] Forbidden - Insufficient permissions")
+        elif error.status_code == 404:
+            print(f"[ERROR] Not found - SVM may not exist")
+        
+        if error.http_err_response and error.http_err_response.http_response:
+            print(f"[ERROR] Details: {error.http_err_response.http_response.text}")
+        else:
+            print(f"[ERROR] Details: {str(error)}")
+        
+        return False
+    
+    except Exception as e:
+        print(f"[ERROR] Unexpected error during certificate query: {type(e).__name__}")
+        print(f"[ERROR] Details: {str(e)}")
+        return False
+
+
+# ============================================================================
 # CERTIFICATE INSTALLATION FUNCTION
 # ============================================================================
 
@@ -725,6 +856,7 @@ def display_menu():
     print("="*70)
     print("\n[1] Generate Certificate Signing Request (CSR)")
     print("[2] Install Signed Certificate")
+    print("[3] Modify Certificate (Show & Extract Serial Numbers)")
     print("[0] Exit (with event logs backup)")
     print("[9] Exit without logs")
     print("\n" + "="*70)
@@ -777,6 +909,23 @@ def execute_option(option, config_data):
             print("[+] The certificate is now active on the SVM")
         else:
             print("\n[ERROR] Failed to install certificate")
+            print("[ERROR] Check the error messages above and try again")
+        
+        return True
+    
+    elif option == "3":
+        # CERTIFICATE MODIFICATION
+        if 'svm' not in config_data or 'name' not in config_data['svm']:
+            print("\n[ERROR] No SVM name found in config.yaml")
+            print("[ERROR] Add 'name' field in 'svm' section")
+            return True
+        
+        print("\n[*] Starting certificate modification workflow...")
+        if modify_certificate(config_data['svm']['name']):
+            print("\n[SUCCESS] Certificate query completed successfully!")
+            print("[+] Serial numbers have been extracted and displayed")
+        else:
+            print("\n[ERROR] Failed to query certificates")
             print("[ERROR] Check the error messages above and try again")
         
         return True
