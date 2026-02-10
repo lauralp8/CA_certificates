@@ -1,15 +1,17 @@
 # NetApp ONTAP Certificate Management Script
 
-Script de Python para la generación automática de Certificate Signing Requests (CSR) en sistemas NetApp ONTAP usando la API REST.
+Script de Python para la generación automática de Certificate Signing Requests (CSR) e instalación de certificados firmados en sistemas NetApp ONTAP usando la API REST.
 
 ## 📋 Descripción
 
-Este script automatiza la generación de CSR (Certificate Signing Request) y pares de claves privadas en NetApp ONTAP, facilitando el proceso de obtención de certificados digitales firmados por una Autoridad de Certificación (CA).
+Este script automatiza la generación de CSR (Certificate Signing Request) y pares de claves privadas, así como la instalación de certificados firmados en NetApp ONTAP, facilitando el proceso completo de gestión de certificados digitales.
 
 ## ✨ Características
 
 - ✅ Generación de Certificate Signing Request (CSR)
 - ✅ Generación de par de claves público/privadas
+- ✅ **Instalación de certificados firmados**
+- ✅ **Visualización de certificados instalados desde la cabina**
 - ✅ Configuración de Subject Alternative Names (SAN)
 - ✅ Configuración de Extended Key Usage
 - ✅ Soporte para múltiples algoritmos de cifrado (RSA, EC)
@@ -17,6 +19,7 @@ Este script automatiza la generación de CSR (Certificate Signing Request) y par
 - ✅ Validación completa de parámetros
 - ✅ Guardado automático de logs en formato JSON
 - ✅ Manejo completo de errores
+- ✅ Menú interactivo para selección de operaciones
 
 ## 📦 Requisitos
 
@@ -87,6 +90,25 @@ Ejecuta el script:
 python ca_certificates.py
 ```
 
+### Menú Interactivo
+
+El script presenta un menú con las siguientes opciones:
+
+```
+======================================================================
+  CERTIFICATE MANAGEMENT MENU
+======================================================================
+
+[1] Generate Certificate Signing Request (CSR)
+[2] Install Signed Certificate
+[0] Exit (with event logs backup)
+[9] Exit without logs
+
+======================================================================
+```
+
+### Opción 1: Generar CSR
+
 El script ejecutará los siguientes pasos:
 
 1. ✅ Carga la configuración desde `config.yaml`
@@ -94,8 +116,42 @@ El script ejecutará los siguientes pasos:
 3. ✅ Establece conexión con el cluster NetApp
 4. ✅ Genera el CSR y el par de claves
 5. ✅ Muestra el CSR y la clave privada generados
-6. ✅ Guarda los resultados en `logs/certificate_csr_YYYYMMDD_HHMMSS.json`
-7. ✅ Genera backup de logs de eventos del cluster
+6. ✅ Guarda los resultados en `csr_certificates/certificate_and_key_YYYYMMDD_HHMMSS.txt`
+
+### Opción 2: Instalar Certificado Firmado
+
+**Pasos previos:**
+1. Genera un CSR usando la opción [1]
+2. Envía el CSR a tu CA (Certificate Authority) para que lo firmen
+3. Recibe el certificado firmado de la CA
+4. Pega el certificado firmado y la clave privada en `config.yaml`
+
+**Campos requeridos en config.yaml:**
+```yaml
+certificate:
+  cert_name: rhoso  # Nombre del certificado en ONTAP
+  type: server      # Tipo: server, client, client-ca, server-ca, root-ca
+  
+  public_certificate: |
+    -----BEGIN CERTIFICATE-----
+    MIIFgzCCBGugAwIBAgIKUgZ9GQABAAAByDANBgk...
+    ...pega aquí tu certificado firmado completo...
+    -----END CERTIFICATE-----
+  
+  private_key: |
+    -----BEGIN PRIVATE KEY-----
+    MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSk...
+    ...pega aquí tu clave privada completa...
+    -----END PRIVATE KEY-----
+```
+
+**El script ejecutará:**
+1. ✅ Valida que los certificados y claves estén presentes
+2. ✅ Instala el certificado en la SVM especificada
+3. ✅ Muestra los detalles del certificado instalado desde la cabina
+4. ✅ Guarda información en `logs/certificate_install_YYYYMMDD_HHMMSS.json`
+
+**Nota:** La pregunta "Do you want to continue entering root and/or intermediate certificates?" se responde automáticamente con "n".
 
 ## 📊 Salida del Script
 
@@ -147,8 +203,11 @@ CA_certificates/
 ├── ca_certificates.py      # Script principal
 ├── config.yaml             # Archivo de configuración
 ├── README.md              # Este archivo
+├── csr_certificates/      # Directorio para CSR generados (se crea automáticamente)
+│   └── certificate_and_key_YYYYMMDD_HHMMSS.txt
 └── logs/                  # Directorio de logs (se crea automáticamente)
-    └── certificate_csr_YYYYMMDD_HHMMSS.json
+    ├── certificate_install_YYYYMMDD_HHMMSS.json
+    └── event_logs_YYYYMMDD_HHMMSS.json
 ```
 
 ## 🔒 Seguridad
@@ -161,8 +220,9 @@ CA_certificates/
 
 ## 📝 Equivalencia con CLI de ONTAP
 
-Este script implementa el siguiente comando de ONTAP:
+Este script implementa los siguientes comandos de ONTAP:
 
+### Generar CSR (Opción 1)
 ```bash
 security certificate generate-csr \
   -common-name SVMv2-XXXXXX-RHOSO_COR_NAS01-NAS.es-north-1.cc.vdc.adm \
@@ -174,6 +234,15 @@ security certificate generate-csr \
   -state CORUNA \
   -locality CORUNA \
   -dns-name SVMv2-XXXXXX-RHOSO_COR_NAS01-NAS.es-north-1.cc.vdc.adm
+```
+
+### Instalar Certificado (Opción 2)
+```bash
+security certificate install \
+  -vserver SVMv2-XXXXXX-RHOSO_COR_NAS01-NAS \
+  -type server \
+  -cert-name rhoso
+# [Automáticamente responde "n" a certificados intermedios/root]
 ```
 
 ## 🐛 Troubleshooting

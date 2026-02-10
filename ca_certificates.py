@@ -27,7 +27,7 @@ Version: 1.0.0
 # IMPORTS
 # ============================================================================
 from netapp_ontap import config, HostConnection, NetAppRestError
-from netapp_ontap.resources import Cluster, EmsEvent
+from netapp_ontap.resources import Cluster, EmsEvent, SecurityCertificate
 import yaml
 import json
 import os
@@ -490,6 +490,155 @@ def csr_generate(cert_config):
 
 
 # ============================================================================
+# CERTIFICATE INSTALLATION FUNCTION
+# ============================================================================
+
+def install_certificate(cert_config, svm_name):
+    """
+    Instala un certificado firmado en NetApp ONTAP
+    
+    Equivalente a:
+    security certificate install -vserver <svm> -type server -cert-name <name>
+    
+    Args:
+        cert_config: Diccionario con configuración del certificado
+        svm_name: Nombre de la SVM donde instalar el certificado
+    
+    Returns:
+        bool: True si se instaló exitosamente, False si hubo error
+    """
+    try:
+        print(f"\n[*] Starting certificate installation workflow...")
+        
+        # Validar campos requeridos
+        required_fields = ['cert_name', 'public_certificate', 'private_key']
+        missing_fields = [field for field in required_fields if field not in cert_config or not cert_config[field]]
+        
+        if missing_fields:
+            print(f"[ERROR] Missing required fields in certificate configuration: {', '.join(missing_fields)}")
+            print(f"[ERROR] Please add these fields to config.yaml in the 'certificate' section")
+            return False
+        
+        cert_name = cert_config['cert_name']
+        public_cert = cert_config['public_certificate']
+        private_key = cert_config['private_key']
+        
+        # Obtener tipo de certificado (por defecto: server)
+        cert_type = cert_config.get('type', 'server')
+        
+        print(f"[+] Certificate installation details:")
+        print(f"    - SVM: {svm_name}")
+        print(f"    - Certificate Name: {cert_name}")
+        print(f"    - Type: {cert_type}")
+        print(f"    - Public Certificate Length: {len(public_cert)} characters")
+        print(f"    - Private Key Length: {len(private_key)} characters")
+        
+        # POST: Crear el certificado en ONTAP
+        print(f"\n[*] Calling NetApp API to install certificate...")
+        
+        cert = SecurityCertificate()
+        cert.svm = {"name": svm_name}
+        cert.type = cert_type
+        cert.name = cert_name
+        cert.public_certificate = public_cert
+        cert.private_key = private_key
+        
+        # Instalar el certificado
+        cert.post()
+        
+        print(f"[+] Certificate installed successfully!")
+        
+        # GET: Obtener y mostrar el certificado instalado desde la cabina
+        print(f"\n[*] Retrieving installed certificate details from cluster...")
+        
+        installed_certs = SecurityCertificate.get_collection(
+            **{"svm.name": svm_name, "name": cert_name}
+        )
+        
+        print(f"\n{'='*110}")
+        print(f"  Installed Certificate Details")
+        print(f"{'='*110}")
+        
+        cert_found = False
+        for installed_cert in installed_certs:
+            cert_found = True
+            installed_cert.get()  # Obtener detalles completos
+            
+            print(f"\nCertificate Name: {installed_cert.name}")
+            print(f"Type: {installed_cert.type}")
+            print(f"SVM: {installed_cert.svm.name if hasattr(installed_cert.svm, 'name') else 'N/A'}")
+            
+            if hasattr(installed_cert, 'common_name'):
+                print(f"Common Name: {installed_cert.common_name}")
+            
+            if hasattr(installed_cert, 'serial_number'):
+                print(f"Serial Number: {installed_cert.serial_number}")
+            
+            if hasattr(installed_cert, 'ca'):
+                print(f"CA: {installed_cert.ca}")
+            
+            if hasattr(installed_cert, 'expiry_time'):
+                print(f"Expiry Time: {installed_cert.expiry_time}")
+            
+            if hasattr(installed_cert, 'hash_function'):
+                print(f"Hash Function: {installed_cert.hash_function}")
+            
+            if hasattr(installed_cert, 'key_size'):
+                print(f"Key Size: {installed_cert.key_size} bits")
+            
+            if hasattr(installed_cert, 'public_certificate'):
+                print(f"\nPublic Certificate:")
+                print(f"{'='*70}")
+                print(installed_cert.public_certificate)
+                print(f"{'='*70}")
+        
+        if not cert_found:
+            print(f"[WARNING] Certificate installed but not found in query (may take a moment to appear)")
+        
+        print(f"\n{'='*110}\n")
+        
+        # Guardar información en log
+        cert_log_data = {
+            'cert_name': cert_name,
+            'svm_name': svm_name,
+            'type': cert_type,
+            'installation_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'status': 'installed'
+        }
+        
+        save_to_log('certificate_install', cert_log_data)
+        
+        print(f"[SUCCESS] Certificate installation completed!")
+        print(f"[INFO] You should keep a copy of the private key and the CA-signed digital certificate for future reference")
+        
+        return True
+    
+    # CONTROL DE ERRORES
+    except NetAppRestError as error:
+        print(f"[ERROR] NetApp API error during certificate installation")
+        print(f"[ERROR] HTTP Status: {error.status_code}")
+        
+        if error.status_code == 400:
+            print(f"[ERROR] Bad request - Check certificate format and parameters")
+        elif error.status_code == 403:
+            print(f"[ERROR] Forbidden - Insufficient permissions")
+        elif error.status_code == 409:
+            print(f"[ERROR] Conflict - Certificate with this name may already exist")
+        
+        if error.http_err_response and error.http_err_response.http_response:
+            print(f"[ERROR] Details: {error.http_err_response.http_response.text}")
+        else:
+            print(f"[ERROR] Details: {str(error)}")
+        
+        return False
+    
+    except Exception as e:
+        print(f"[ERROR] Unexpected error during certificate installation: {type(e).__name__}")
+        print(f"[ERROR] Details: {str(e)}")
+        return False
+
+
+# ============================================================================
 # EVENT LOG RETRIEVAL FUNCTION
 # ============================================================================
 
@@ -575,6 +724,7 @@ def display_menu():
     print("  CERTIFICATE MANAGEMENT MENU")
     print("="*70)
     print("\n[1] Generate Certificate Signing Request (CSR)")
+    print("[2] Install Signed Certificate")
     print("[0] Exit (with event logs backup)")
     print("[9] Exit without logs")
     print("\n" + "="*70)
@@ -605,6 +755,28 @@ def execute_option(option, config_data):
             print("[+] Submit the CSR to your Certificate Authority to obtain a signed certificate")
         else:
             print("\n[ERROR] Failed to generate Certificate Signing Request")
+            print("[ERROR] Check the error messages above and try again")
+        
+        return True
+    
+    elif option == "2":
+        # CERTIFICATE INSTALLATION
+        if 'certificate' not in config_data:
+            print("\n[ERROR] No certificate configuration found in config.yaml")
+            print("[ERROR] Add a 'certificate' section with cert_name, public_certificate, and private_key")
+            return True
+        
+        if 'svm' not in config_data or 'name' not in config_data['svm']:
+            print("\n[ERROR] No SVM name found in config.yaml")
+            print("[ERROR] Add 'name' field in 'svm' section")
+            return True
+        
+        print("\n[*] Starting certificate installation workflow...")
+        if install_certificate(config_data['certificate'], config_data['svm']['name']):
+            print("\n[SUCCESS] Certificate installed successfully!")
+            print("[+] The certificate is now active on the SVM")
+        else:
+            print("\n[ERROR] Failed to install certificate")
             print("[ERROR] Check the error messages above and try again")
         
         return True

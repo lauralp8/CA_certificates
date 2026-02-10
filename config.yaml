@@ -39,3 +39,22 @@ certificate:
   # key_usage:
   #   - digitalSignature
   #   - keyEncipherment
+  
+  # CERTIFICATE INSTALLATION SETTINGS (for option [2])
+  # Paste your signed certificate and private key here
+  cert_name: rhoso  # Name for the certificate in ONTAP
+  type: server  # Certificate type (server, client, client-ca, server-ca, root-ca)
+  
+  # Paste your PUBLIC CERTIFICATE here (including BEGIN/END CERTIFICATE lines)
+  public_certificate: |
+    -----BEGIN CERTIFICATE-----
+    MIIFgzCCBGugAwIBAgIKUgZ9GQABAAAByDANBgkqhkiG9w0BAQ0FADA7MRMwEQYK
+    ...paste your certificate here...
+    -----END CERTIFICATE-----
+  
+  # Paste your PRIVATE KEY here (including BEGIN/END PRIVATE KEY lines)
+  private_key: |
+    -----BEGIN PRIVATE KEY-----
+    MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC++uDwOXibufFV
+    ...paste your private key here...
+    -----END PRIVATE KEY-----
