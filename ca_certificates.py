@@ -607,113 +607,49 @@ def modify_certificate(svm_name):
             print(f"\n[*] Operation 1: Enabling SSL for first certificate...")
             print(f"    - Common Name: {certificate_data[0]['common_name']}")
             print(f"    - Serial Number: {certificate_data[0]['serial_number']}")
-            print(f"    - Certificate UUID: {certificate_data[0]['uuid']}")
             
             try:
                 # PATCH: Modificar SSL de la SVM usando API REST directa
                 print(f"[*] Calling NetApp API: security ssl modify...")
                 
-                # Obtener el UUID de la SVM usando get_collection con filtro
+                # Obtener el UUID de la SVM
                 svm_collection = Svm.get_collection(**{"name": svm_name})
                 svm_uuid = None
-                
                 for svm_item in svm_collection:
                     svm_uuid = svm_item.uuid
-                    break  # Tomar el primero que coincida
+                    break
                 
                 if not svm_uuid:
-                    print(f"[WARNING] Could not find SVM UUID for {svm_name}")
                     raise Exception(f"SVM {svm_name} not found")
                 
-                print(f"[DEBUG] SVM UUID: {svm_uuid}")
-                
-                # Obtener host, username, password de la conexión
+                # Obtener conexión y credenciales
                 connection = config.CONNECTION
+                host = connection.origin.replace('https://', '').replace('http://', '').split(':')[0]
+                username = connection.username
+                password = connection.password
                 
-                # Obtener el host (puede venir como https://host:443)
-                if hasattr(connection, 'origin'):
-                    host_full = connection.origin
-                elif hasattr(connection, 'host'):
-                    host_full = connection.host
-                else:
-                    raise Exception("Cannot determine cluster host from connection object")
-                
-                # Limpiar el host (quitar https:// y puerto)
-                host = host_full.replace('https://', '').replace('http://', '').split(':')[0]
-                
-                print(f"[DEBUG] Cluster host: {host}")
-                
-                # Obtener credenciales
-                username = connection.username if hasattr(connection, 'username') else None
-                password = connection.password if hasattr(connection, 'password') else None
-                
-                if not username or not password:
-                    raise Exception("Cannot get credentials from connection object")
-                
-                print(f"[DEBUG] Username: {username}")
-                
-                # Construir el endpoint y payload para SSL modify
+                # *** LÍNEA CRÍTICA: Asignar certificado SSL a la SVM (habilita SSL) ***
                 url = f"https://{host}/api/svm/svms/{svm_uuid}"
+                payload = {"certificate": {"uuid": certificate_data[0]['uuid']}}
                 
-                # Intentar diferentes payloads para encontrar el correcto
-                payloads_to_try = [
-                    {"certificate": {"uuid": certificate_data[0]['uuid']}},
-                    {"certificate": {"name": certificate_data[0]['name']}},
-                    {
-                        "certificate": {
-                            "uuid": certificate_data[0]['uuid'],
-                            "name": certificate_data[0]['name']
-                        }
-                    },
-                ]
+                response = requests.patch(
+                    url,
+                    json=payload,
+                    auth=(username, password),
+                    verify=False,
+                    headers={'Content-Type': 'application/json'}
+                )
                 
-                print(f"[DEBUG] Testing SSL modify with certificate UUID: {certificate_data[0]['uuid']}")
-                print(f"[DEBUG] Certificate Name: {certificate_data[0]['name']}")
-                
-                success = False
-                last_response = None
-                
-                for idx, payload in enumerate(payloads_to_try):
-                    print(f"[DEBUG] Attempt {idx + 1}: Payload = {json.dumps(payload)}")
-                    
-                    # Realizar el PATCH request
-                    response = requests.patch(
-                        url,
-                        json=payload,
-                        auth=(username, password),
-                        verify=False,
-                        headers={'Content-Type': 'application/json'}
-                    )
-                    
-                    last_response = response
-                    
-                    print(f"[DEBUG] Response status: {response.status_code}")
-                    
-                    if len(response.text) > 0:
-                        print(f"[DEBUG] Response body: {response.text[:500]}")
-                    
-                    if response.status_code in [200, 201, 202]:
-                        print(f"[+] SSL certificate assignment successful with payload #{idx + 1}!")
-                        success = True
-                        break
-                    elif response.status_code == 204:
-                        print(f"[+] SSL certificate assignment successful (204 No Content)!")
-                        success = True
-                        break
-                    else:
-                        print(f"[DEBUG] Attempt {idx + 1} failed with status {response.status_code}")
-                
-                if not success and last_response:
-                    print(f"[WARNING] All SSL modify attempts failed")
-                    print(f"[WARNING] Last response status: {last_response.status_code}")
-                    print(f"[WARNING] Last response: {last_response.text}")
+                if response.status_code in [200, 201, 202, 204]:
+                    print(f"[+] SSL certificate assigned successfully!")
+                    print(f"[+] SSL Server Authentication Enabled: true")
+                else:
+                    print(f"[WARNING] SSL modify returned status {response.status_code}")
+                    print(f"[WARNING] Response: {response.text}")
             
             except Exception as ssl_error:
                 print(f"[WARNING] Failed to modify SSL configuration")
                 print(f"[WARNING] Error: {str(ssl_error)}")
-                import traceback
-                print(f"[DEBUG] Full traceback:")
-                traceback.print_exc()
         
         # 2. Con el SEGUNDO certificado: security certificate delete
         if len(certificate_data) >= 2 and certificate_data[1]['serial_number']:
