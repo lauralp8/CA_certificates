@@ -28,6 +28,7 @@ Version: 1.0.0
 # ============================================================================
 from netapp_ontap import config, HostConnection, NetAppRestError
 from netapp_ontap.resources import Cluster, EmsEvent, SecurityCertificate
+from netapp_ontap.resources import Svm
 import yaml
 import json
 import os
@@ -499,9 +500,15 @@ def modify_certificate(svm_name):
     
     Equivalente a:
     security certificate show -vserver <svm> -instance
+    security ssl modify -vserver <svm> -common-name <cn> -serial <serial1> -server-enabled true
+    security certificate delete -type server -vserver <svm> -serial <serial2> -common-name <cn>
+    security ssl show -vserver <svm>
     
     Muestra los certificados de una SVM, filtra los que tienen common_name
-    y certificate_name, y extrae los Serial Numbers.
+    y certificate_name, extrae los Serial Numbers, y realiza operaciones:
+    - Primer certificado: Habilita SSL (security ssl modify)
+    - Segundo certificado: Elimina el certificado (security certificate delete)
+    - Muestra la configuración SSL final
     
     Args:
         svm_name: Nombre de la SVM para filtrar certificados
@@ -524,8 +531,8 @@ def modify_certificate(svm_name):
         print(f"  Certificate Show - SVM: {svm_name}")
         print(f"{'='*110}\n")
         
-        # Lista para almacenar los serial numbers encontrados
-        serial_numbers = []
+        # Lista para almacenar certificados con sus datos
+        certificate_data = []
         cert_count = 0
         
         for cert in certificates:
@@ -545,15 +552,24 @@ def modify_certificate(svm_name):
                 print(f"Certificate Name: {cert.name}")
                 print(f"Common Name: {cert.common_name}")
                 
+                # Almacenar datos del certificado
+                cert_info = {
+                    'name': cert.name,
+                    'common_name': cert.common_name,
+                    'serial_number': None,
+                    'uuid': cert.uuid if hasattr(cert, 'uuid') else None
+                }
+                
                 # Extraer Serial Number si existe
                 if hasattr(cert, 'serial_number') and cert.serial_number:
-                    serial_numbers.append(cert.serial_number)
+                    cert_info['serial_number'] = cert.serial_number
                     print(f"Serial Number: {cert.serial_number}")
                 else:
                     print(f"Serial Number: N/A")
                 
                 # Mostrar información adicional
                 if hasattr(cert, 'type'):
+                    cert_info['type'] = cert.type
                     print(f"Type: {cert.type}")
                 
                 if hasattr(cert, 'ca'):
@@ -568,44 +584,127 @@ def modify_certificate(svm_name):
                 if hasattr(cert, 'key_size'):
                     print(f"Key Size: {cert.key_size} bits")
                 
+                certificate_data.append(cert_info)
                 print(f"")
         
         print(f"{'='*110}")
         print(f"\nTotal certificates found with Common Name and Certificate Name: {cert_count}")
         
         # Imprimir resumen de Serial Numbers
+        serial_numbers = [cert['serial_number'] for cert in certificate_data if cert['serial_number']]
         if serial_numbers:
             print(f"\n[+] Serial Numbers extracted:")
             for idx, serial in enumerate(serial_numbers, 1):
                 print(f"    [{idx}] {serial}")
         else:
             print(f"\n[WARNING] No serial numbers found in the certificates")
+            return False
         
-        # Guardar información en log
-        cert_log_data = {
-            'svm_name': svm_name,
-            'total_certificates': cert_count,
-            'serial_numbers': serial_numbers,
-            'query_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
+        # OPERACIONES CON LOS CERTIFICADOS
+        # 1. Con el PRIMER certificado: security ssl modify -server-enabled true
+        if len(certificate_data) >= 1 and certificate_data[0]['serial_number']:
+            print(f"\n[*] Operation 1: Enabling SSL for first certificate...")
+            print(f"    - Common Name: {certificate_data[0]['common_name']}")
+            print(f"    - Serial Number: {certificate_data[0]['serial_number']}")
+            
+            try:
+                # PATCH: Modificar SSL de la SVM
+                print(f"[*] Calling NetApp API: security ssl modify...")
+                
+                svm = Svm(name=svm_name)
+                svm.certificate = {
+                    "uuid": certificate_data[0]['uuid']
+                }
+                svm.patch()
+                
+                print(f"[+] SSL configuration updated successfully!")
+            
+            except NetAppRestError as ssl_error:
+                print(f"[WARNING] Failed to modify SSL configuration")
+                print(f"[WARNING] HTTP Status: {ssl_error.status_code}")
+                if ssl_error.http_err_response and ssl_error.http_err_response.http_response:
+                    print(f"[WARNING] Details: {ssl_error.http_err_response.http_response.text}")
         
-        save_to_log('certificate_show', cert_log_data)
+        # 2. Con el SEGUNDO certificado: security certificate delete
+        if len(certificate_data) >= 2 and certificate_data[1]['serial_number']:
+            print(f"\n[*] Operation 2: Deleting second certificate...")
+            print(f"    - Common Name: {certificate_data[1]['common_name']}")
+            print(f"    - Serial Number: {certificate_data[1]['serial_number']}")
+            print(f"    - Certificate Name: {certificate_data[1]['name']}")
+            
+            try:
+                # DELETE: Eliminar el certificado
+                print(f"[*] Calling NetApp API: security certificate delete...")
+                
+                cert_to_delete = SecurityCertificate(uuid=certificate_data[1]['uuid'])
+                cert_to_delete.delete()
+                
+                print(f"[+] Certificate deleted successfully!")
+            
+            except NetAppRestError as del_error:
+                print(f"[WARNING] Failed to delete certificate")
+                print(f"[WARNING] HTTP Status: {del_error.status_code}")
+                if del_error.http_err_response and del_error.http_err_response.http_response:
+                    print(f"[WARNING] Details: {del_error.http_err_response.http_response.text}")
         
-        print(f"\n[SUCCESS] Certificate query completed!")
+        # 3. GET: Mostrar configuración SSL final y guardar en log
+        print(f"\n[*] Retrieving final SSL configuration...")
+        print(f"[*] Calling NetApp API: security ssl show -vserver {svm_name}")
+        
+        try:
+            svm_ssl = Svm(name=svm_name)
+            svm_ssl.get(fields="certificate,uuid,name")
+            
+            print(f"\n{'='*110}")
+            print(f"  SSL Configuration - SVM: {svm_name}")
+            print(f"{'='*110}")
+            print(f"SVM Name: {svm_ssl.name}")
+            print(f"SVM UUID: {svm_ssl.uuid}")
+            
+            if hasattr(svm_ssl, 'certificate') and svm_ssl.certificate:
+                print(f"\nSSL Certificate Configuration:")
+                if hasattr(svm_ssl.certificate, 'name'):
+                    print(f"  Certificate Name: {svm_ssl.certificate.name}")
+                if hasattr(svm_ssl.certificate, 'uuid'):
+                    print(f"  Certificate UUID: {svm_ssl.certificate.uuid}")
+            else:
+                print(f"\nNo SSL certificate configured")
+            
+            print(f"{'='*110}\n")
+            
+            # Guardar en log
+            ssl_config_data = {
+                'svm_name': svm_name,
+                'svm_uuid': svm_ssl.uuid,
+                'certificate': {
+                    'name': svm_ssl.certificate.name if hasattr(svm_ssl, 'certificate') and hasattr(svm_ssl.certificate, 'name') else None,
+                    'uuid': svm_ssl.certificate.uuid if hasattr(svm_ssl, 'certificate') and hasattr(svm_ssl.certificate, 'uuid') else None
+                } if hasattr(svm_ssl, 'certificate') else None,
+                'query_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            save_to_log('ssl_show', ssl_config_data)
+            print(f"[+] SSL configuration saved to log")
+        
+        except NetAppRestError as ssl_show_error:
+            print(f"[WARNING] Failed to retrieve SSL configuration")
+            print(f"[WARNING] HTTP Status: {ssl_show_error.status_code}")
+        
+        print(f"\n[SUCCESS] Certificate modification workflow completed!")
         
         return True
     
     # CONTROL DE ERRORES
     except NetAppRestError as error:
-        print(f"[ERROR] NetApp API error during certificate query")
+        print(f"[ERROR] NetApp API error during certificate modification")
         print(f"[ERROR] HTTP Status: {error.status_code}")
         
         if error.status_code == 400:
-            print(f"[ERROR] Bad request - Check SVM name")
+            print(f"[ERROR] Bad request - Check SVM name and parameters")
         elif error.status_code == 403:
             print(f"[ERROR] Forbidden - Insufficient permissions")
         elif error.status_code == 404:
-            print(f"[ERROR] Not found - SVM may not exist")
+            print(f"[ERROR] Not found - SVM or certificate may not exist")
         
         if error.http_err_response and error.http_err_response.http_response:
             print(f"[ERROR] Details: {error.http_err_response.http_response.text}")
@@ -615,7 +714,7 @@ def modify_certificate(svm_name):
         return False
     
     except Exception as e:
-        print(f"[ERROR] Unexpected error during certificate query: {type(e).__name__}")
+        print(f"[ERROR] Unexpected error during certificate modification: {type(e).__name__}")
         print(f"[ERROR] Details: {str(e)}")
         return False
 
