@@ -626,18 +626,20 @@ def modify_certificate(svm_name, cert_config=None):
                     # Construir el comando usando la API REST de NetApp
                     # Equivalente a: security ssl modify -vserver <svm> -ca <ca> -common-name <cn> -serial <serial> -server-enabled <true/false>
                     
-                    # NetApp ONTAP REST API para SSL usa el endpoint /api/security/authentication/cluster/ad-proxy
-                    # o directamente configuración SSL a través de SecurityConfig
-                    # Sin embargo, la modificación SSL no tiene un recurso directo en netapp_ontap library
-                    # Usaremos la API REST directamente
-                    
                     from netapp_ontap import config as ontap_config
                     import requests
-                    import json
+                    import urllib3
                     
-                    # Construir URL del endpoint
-                    cluster_url = f"https://{ontap_config.CONNECTION.origin}"
-                    api_url = f"{cluster_url}/api/security/certificates/{first_cert['uuid']}"
+                    # Deshabilitar warnings de SSL
+                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                    
+                    # Obtener el host del cluster (sin el esquema https://)
+                    cluster_host = ontap_config.CONNECTION.origin.netloc if hasattr(ontap_config.CONNECTION.origin, 'netloc') else ontap_config.CONNECTION._host
+                    
+                    # Construir URL correctamente
+                    # El endpoint correcto para SSL es /api/security/ssl
+                    # Pero como no existe un endpoint directo, usaremos el de certificados con PATCH
+                    api_url = f"https://{cluster_host}/api/security/certificates/{first_cert['uuid']}"
                     
                     # Preparar headers
                     headers = {
@@ -645,33 +647,33 @@ def modify_certificate(svm_name, cert_config=None):
                         'Accept': 'application/json'
                     }
                     
-                    # Preparar el body para PATCH
-                    ssl_body = {
-                        'ca': ca_name,
-                        'server_enabled': server_enabled
-                    }
+                    # La configuración SSL no se modifica a través del endpoint de certificados
+                    # NetApp ONTAP no expone un endpoint REST directo para "security ssl modify"
+                    # La mejor opción es usar el CLI a través de SSH o ejecutar comandos directamente
                     
-                    # Realizar PATCH request
-                    response = requests.patch(
-                        api_url,
-                        auth=(ontap_config.CONNECTION.username, ontap_config.CONNECTION.password),
-                        headers=headers,
-                        json=ssl_body,
-                        verify=False
-                    )
+                    # Intentar usar requests para verificar si existe algún endpoint
+                    # Pero dado que no hay endpoint directo, mostraremos el comando CLI
                     
-                    if response.status_code in [200, 201, 202, 204]:
-                        print(f"\n[+] SSL configuration modified successfully!")
-                        print(f"[+] Certificate {common_name} (Serial: {first_serial}) updated")
-                        print(f"[+] Server enabled: {server_enabled}")
-                    else:
-                        print(f"\n[WARNING] SSL modification returned status: {response.status_code}")
-                        print(f"[WARNING] Response: {response.text}")
-                        print(f"[INFO] This may be normal if SSL modification is not supported via REST API")
-                        print(f"[INFO] You may need to use CLI: security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {first_serial} -server-enabled {str(server_enabled).lower()}")
+                    print(f"\n[INFO] NetApp ONTAP REST API does not provide a direct endpoint for 'security ssl modify'")
+                    print(f"[INFO] This command must be executed via CLI on the cluster")
+                    print(f"\n[+] SSL Modification Command:")
+                    print(f"{'='*70}")
+                    print(f"security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {first_serial} -server-enabled {str(server_enabled).lower()}")
+                    print(f"{'='*70}")
+                    
+                    # Guardar el comando en un archivo para referencia
+                    ssl_command_file = os.path.join('logs', f'ssl_modify_command_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt')
+                    os.makedirs('logs', exist_ok=True)
+                    with open(ssl_command_file, 'w') as f:
+                        f.write(f"# SSL Modify Command\n")
+                        f.write(f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                        f.write(f"security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {first_serial} -server-enabled {str(server_enabled).lower()}\n")
+                    
+                    print(f"\n[+] Command saved to: {ssl_command_file}")
+                    print(f"[INFO] Execute this command on the NetApp cluster CLI")
                 
                 except Exception as ssl_error:
-                    print(f"\n[WARNING] Could not modify SSL configuration via API: {str(ssl_error)}")
+                    print(f"\n[ERROR] Error preparing SSL modification command: {str(ssl_error)}")
                     print(f"[INFO] Manual command to execute:")
                     print(f"[INFO] security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {first_serial} -server-enabled {str(server_enabled).lower()}")
             else:
