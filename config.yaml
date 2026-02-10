@@ -52,7 +52,7 @@ certificate:
   type: server  # Certificate type (server, client, client-ca, server-ca, root-ca)
   
   # Paste your PUBLIC CERTIFICATE here (including BEGIN/END CERTIFICATE lines)
-  public_certificate: |
+  public_certificate: |-
     -----BEGIN CERTIFICATE-----
     MIIEXDCCAkSgAwIBAgIUAyOSU6IpjRwZHpubBk8mljgFIcEwDQYJKoZIhvcNAQEL
     BQAwRzELMAkGA1UEBhMCRVMxDjAMBgNVBAoMBU1pTGFiMRIwEAYDVQQLDAlPTlRB
@@ -81,7 +81,7 @@ certificate:
     -----END CERTIFICATE-----
       
   # Paste your PRIVATE KEY here (including BEGIN/END PRIVATE KEY lines)
-  private_key: |
+  private_key: |-
     -----BEGIN PRIVATE KEY-----
     MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC2fCuUlDSvCgRu
     nhtuxCIuuXUT/8hvyih3RKA9Cq91mnFElq66ym+FI6F54LS8MRCXnXsu32Pmu6ql
