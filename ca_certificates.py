@@ -601,59 +601,6 @@ def modify_certificate(svm_name, cert_config=None):
         else:
             print(f"\n[WARNING] No serial numbers found in the certificates")
             return False
-        
-        # SECURITY SSL MODIFY: Modificar SSL para el primer certificado
-        if len(serial_numbers) > 0 and cert_config:
-            first_serial = serial_numbers[0]
-            first_cert = certificate_data[0]
-            
-            # Obtener parámetros de configuración
-            ssl_config = cert_config.get('ssl', {})
-            ca_name = ssl_config.get('ca_name')
-            server_enabled = ssl_config.get('server_enabled', True)
-            common_name = first_cert.get('common_name')
-            
-            if ca_name and common_name:
-                print(f"\n[*] Executing security ssl modify command...")
-                print(f"[*] Parameters:")
-                print(f"    - Vserver: {svm_name}")
-                print(f"    - CA: {ca_name}")
-                print(f"    - Common Name: {common_name}")
-                print(f"    - Serial Number: {first_serial}")
-                print(f"    - Server Enabled: {server_enabled}")
-                
-                # NetApp ONTAP no expone un endpoint REST directo para "security ssl modify"
-                # Este comando debe ejecutarse mediante CLI
-                
-                print(f"\n[INFO] NetApp ONTAP REST API does not provide a direct endpoint for 'security ssl modify'")
-                print(f"[INFO] This command must be executed via CLI on the cluster")
-                print(f"\n[+] SSL Modification Command:")
-                print(f"{'='*70}")
-                ssl_command = f"security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {first_serial} -server-enabled {str(server_enabled).lower()}"
-                print(f"{ssl_command}")
-                print(f"{'='*70}")
-                
-                # Guardar el comando en un archivo para referencia
-                try:
-                    ssl_command_file = os.path.join('logs', f'ssl_modify_command_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt')
-                    os.makedirs('logs', exist_ok=True)
-                    with open(ssl_command_file, 'w') as f:
-                        f.write(f"# SSL Modify Command\n")
-                        f.write(f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                        f.write(f"# Configuration from config.yaml\n\n")
-                        f.write(f"{ssl_command}\n")
-                    
-                    print(f"\n[+] Command saved to: {ssl_command_file}")
-                    print(f"[INFO] Execute this command on the NetApp cluster CLI to apply the SSL configuration")
-                except Exception as e:
-                    print(f"\n[WARNING] Could not save command to file: {str(e)}")
-                    print(f"[INFO] Please execute the command manually on the cluster")
-
-            else:
-                print(f"\n[WARNING] Cannot execute SSL modify: missing ca_name or common_name")
-                print(f"[INFO] Add 'ssl' section to config.yaml with 'ca_name' parameter")
-        
-        return True
     
     # CONTROL DE ERRORES
     except NetAppRestError as error:
