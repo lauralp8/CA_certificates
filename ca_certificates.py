@@ -613,14 +613,21 @@ def modify_certificate(svm_name):
                 # PATCH: Modificar SSL de la SVM usando API REST directa
                 print(f"[*] Calling NetApp API: security ssl modify...")
                 
-                # Obtener el UUID de la SVM primero
-                svm_obj = Svm(name=svm_name)
-                svm_obj.get()
-                svm_uuid = svm_obj.uuid
+                # Obtener el UUID de la SVM usando get_collection con filtro
+                svm_collection = Svm.get_collection(**{"name": svm_name})
+                svm_uuid = None
+                
+                for svm_item in svm_collection:
+                    svm_uuid = svm_item.uuid
+                    break  # Tomar el primero que coincida
+                
+                if not svm_uuid:
+                    print(f"[WARNING] Could not find SVM UUID for {svm_name}")
+                    raise Exception(f"SVM {svm_name} not found")
+                
+                print(f"[DEBUG] SVM UUID: {svm_uuid}")
                 
                 # Construir el endpoint y payload para SSL modify
-                # Endpoint: /api/security/authentication/cluster/ad-proxy o /api/svm/svms/{svm.uuid}
-                # Usamos el endpoint de SVM para modificar el certificado SSL
                 url = f"https://{config.CONNECTION._host}/api/svm/svms/{svm_uuid}"
                 
                 payload = {
@@ -674,9 +681,18 @@ def modify_certificate(svm_name):
         print(f"[*] Calling NetApp API: security ssl show -vserver {svm_name}")
         
         try:
-            # Obtener información de la SVM incluyendo el certificado SSL
-            svm_ssl = Svm(name=svm_name)
-            svm_ssl.get(fields="certificate,uuid,name")
+            # Obtener información de la SVM incluyendo el certificado SSL usando get_collection
+            svm_collection = Svm.get_collection(**{"name": svm_name}, fields="certificate,uuid,name")
+            
+            svm_ssl = None
+            for svm_item in svm_collection:
+                svm_item.get(fields="certificate,uuid,name")
+                svm_ssl = svm_item
+                break  # Tomar el primero
+            
+            if not svm_ssl:
+                print(f"[WARNING] SVM {svm_name} not found")
+                raise Exception(f"SVM {svm_name} not found")
             
             print(f"\n{'='*110}")
             print(f"  SSL Configuration - SVM: {svm_name}")
