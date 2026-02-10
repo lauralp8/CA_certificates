@@ -646,9 +646,8 @@ def modify_certificate(svm_name, cert_config=None):
                     payload = {"certificate": {"uuid": certificate_data[0]['uuid']}}
                     print(f"[DEBUG] Payload to ENABLE SSL: {json.dumps(payload)}")
                 else:
-                    # Deshabilitar SSL: Intentar diferentes formatos
-                    # Opción 1: null (None en Python)
-                    payload = {"certificate": {}}
+                    # Deshabilitar SSL: Enviar null para eliminar la referencia al certificado
+                    payload = {"certificate": None}
                     print(f"[DEBUG] Payload to DISABLE SSL: {json.dumps(payload)}")
                 
                 response = requests.patch(
