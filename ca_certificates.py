@@ -622,60 +622,33 @@ def modify_certificate(svm_name, cert_config=None):
                 print(f"    - Serial Number: {first_serial}")
                 print(f"    - Server Enabled: {server_enabled}")
                 
+                # NetApp ONTAP no expone un endpoint REST directo para "security ssl modify"
+                # Este comando debe ejecutarse mediante CLI
+                
+                print(f"\n[INFO] NetApp ONTAP REST API does not provide a direct endpoint for 'security ssl modify'")
+                print(f"[INFO] This command must be executed via CLI on the cluster")
+                print(f"\n[+] SSL Modification Command:")
+                print(f"{'='*70}")
+                ssl_command = f"security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {first_serial} -server-enabled {str(server_enabled).lower()}"
+                print(f"{ssl_command}")
+                print(f"{'='*70}")
+                
+                # Guardar el comando en un archivo para referencia
                 try:
-                    # Construir el comando usando la API REST de NetApp
-                    # Equivalente a: security ssl modify -vserver <svm> -ca <ca> -common-name <cn> -serial <serial> -server-enabled <true/false>
-                    
-                    from netapp_ontap import config as ontap_config
-                    import requests
-                    import urllib3
-                    
-                    # Deshabilitar warnings de SSL
-                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                    
-                    # Obtener el host del cluster (sin el esquema https://)
-                    cluster_host = ontap_config.CONNECTION.origin.netloc if hasattr(ontap_config.CONNECTION.origin, 'netloc') else ontap_config.CONNECTION._host
-                    
-                    # Construir URL correctamente
-                    # El endpoint correcto para SSL es /api/security/ssl
-                    # Pero como no existe un endpoint directo, usaremos el de certificados con PATCH
-                    api_url = f"https://{cluster_host}/api/security/certificates/{first_cert['uuid']}"
-                    
-                    # Preparar headers
-                    headers = {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    }
-                    
-                    # La configuración SSL no se modifica a través del endpoint de certificados
-                    # NetApp ONTAP no expone un endpoint REST directo para "security ssl modify"
-                    # La mejor opción es usar el CLI a través de SSH o ejecutar comandos directamente
-                    
-                    # Intentar usar requests para verificar si existe algún endpoint
-                    # Pero dado que no hay endpoint directo, mostraremos el comando CLI
-                    
-                    print(f"\n[INFO] NetApp ONTAP REST API does not provide a direct endpoint for 'security ssl modify'")
-                    print(f"[INFO] This command must be executed via CLI on the cluster")
-                    print(f"\n[+] SSL Modification Command:")
-                    print(f"{'='*70}")
-                    print(f"security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {first_serial} -server-enabled {str(server_enabled).lower()}")
-                    print(f"{'='*70}")
-                    
-                    # Guardar el comando en un archivo para referencia
                     ssl_command_file = os.path.join('logs', f'ssl_modify_command_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt')
                     os.makedirs('logs', exist_ok=True)
                     with open(ssl_command_file, 'w') as f:
                         f.write(f"# SSL Modify Command\n")
-                        f.write(f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                        f.write(f"security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {first_serial} -server-enabled {str(server_enabled).lower()}\n")
+                        f.write(f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                        f.write(f"# Configuration from config.yaml\n\n")
+                        f.write(f"{ssl_command}\n")
                     
                     print(f"\n[+] Command saved to: {ssl_command_file}")
-                    print(f"[INFO] Execute this command on the NetApp cluster CLI")
-                
-                except Exception as ssl_error:
-                    print(f"\n[ERROR] Error preparing SSL modification command: {str(ssl_error)}")
-                    print(f"[INFO] Manual command to execute:")
-                    print(f"[INFO] security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {first_serial} -server-enabled {str(server_enabled).lower()}")
+                    print(f"[INFO] Execute this command on the NetApp cluster CLI to apply the SSL configuration")
+                except Exception as e:
+                    print(f"\n[WARNING] Could not save command to file: {str(e)}")
+                    print(f"[INFO] Please execute the command manually on the cluster")
+
             else:
                 print(f"\n[WARNING] Cannot execute SSL modify: missing ca_name or common_name")
                 print(f"[INFO] Add 'ssl' section to config.yaml with 'ca_name' parameter")
