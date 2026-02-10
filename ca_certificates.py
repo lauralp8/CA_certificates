@@ -777,6 +777,21 @@ def install_certificate(cert_config, svm_name):
         print(f"    - Public Certificate Length: {len(public_cert)} characters")
         print(f"    - Private Key Length: {len(private_key)} characters")
         
+        # DEBUG: Validar formato del certificado
+        print(f"\n[DEBUG] Certificate validation:")
+        print(f"    - Starts with '-----BEGIN': {public_cert.strip().startswith('-----BEGIN')}")
+        print(f"    - Ends with '-----END': {public_cert.strip().endswith('-----')}")
+        print(f"    - Contains newlines: {'\\n' in public_cert}")
+        print(f"    - First 50 chars: {repr(public_cert[:50])}")
+        print(f"    - Last 50 chars: {repr(public_cert[-50:])}")
+        
+        print(f"\n[DEBUG] Private Key validation:")
+        print(f"    - Starts with '-----BEGIN': {private_key.strip().startswith('-----BEGIN')}")
+        print(f"    - Ends with '-----END': {private_key.strip().endswith('-----')}")
+        print(f"    - Contains newlines: {'\\n' in private_key}")
+        print(f"    - First 50 chars: {repr(private_key[:50])}")
+        print(f"    - Last 50 chars: {repr(private_key[-50:])}")
+        
         # POST: Crear el certificado en ONTAP
         print(f"\n[*] Calling NetApp API to install certificate...")
         
@@ -786,6 +801,18 @@ def install_certificate(cert_config, svm_name):
         cert.name = cert_name
         cert.public_certificate = public_cert
         cert.private_key = private_key
+        
+        # DEBUG: Mostrar exactamente lo que se va a enviar
+        print(f"\n[DEBUG] Data being sent to NetApp API:")
+        print(f"    - SVM name: {svm_name}")
+        print(f"    - Cert type: {cert_type}")
+        print(f"    - Cert name: {cert_name}")
+        print(f"    - Public cert preview:")
+        for i, line in enumerate(public_cert.split('\n')[:5]):
+            print(f"        Line {i+1}: {repr(line)}")
+        print(f"    - Private key preview:")
+        for i, line in enumerate(private_key.split('\n')[:5]):
+            print(f"        Line {i+1}: {repr(line)}")
         
         # Instalar el certificado
         cert.post()
