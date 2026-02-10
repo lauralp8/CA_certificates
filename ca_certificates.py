@@ -1095,6 +1095,98 @@ def delete_certificate(svm_name, serial_number, cert_config):
         print(f"\n[SUCCESS] Certificate deletion completed successfully!")
         print(f"[+] Operation saved to logs/certificate_delete_*.json")
         
+        # ====================================================================
+        # INFORMACIÓN ADICIONAL: SECURITY LOGIN SHOW Y SSL SHOW
+        # ====================================================================
+        
+        # Security Login Show
+        print(f"\n[*] Retrieving security login information...")
+        try:
+            from netapp_ontap.resources import SecurityAccount
+            
+            logins = SecurityAccount.get_collection(**{"owner.name": svm_name})
+            
+            print(f"\n{'='*70}")
+            print(f"  SECURITY LOGIN SHOW - SVM: {svm_name}")
+            print(f"{'='*70}")
+            
+            login_list = []
+            for login in logins:
+                login.get()
+                login_info = {
+                    'user': login.name if hasattr(login, 'name') else 'N/A',
+                    'application': login.applications[0].application if hasattr(login, 'applications') and login.applications else 'N/A',
+                    'authentication': login.applications[0].authentication_methods[0] if hasattr(login, 'applications') and login.applications and hasattr(login.applications[0], 'authentication_methods') else 'N/A',
+                    'role': login.role.name if hasattr(login, 'role') and hasattr(login.role, 'name') else 'N/A'
+                }
+                login_list.append(login_info)
+                
+                print(f"\nUser: {login_info['user']}")
+                print(f"  Application: {login_info['application']}")
+                print(f"  Authentication: {login_info['authentication']}")
+                print(f"  Role: {login_info['role']}")
+            
+            print(f"\n{'='*70}")
+            print(f"[INFO] Total login accounts: {len(login_list)}")
+            
+            # Guardar en log
+            login_log = {
+                'operation': 'security_login_show',
+                'svm_name': svm_name,
+                'total_logins': len(login_list),
+                'logins': login_list,
+                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            save_to_log('security_login_show', login_log)
+            
+        except Exception as login_error:
+            print(f"[WARNING] Could not retrieve security login info: {str(login_error)}")
+        
+        # Security SSL Show
+        print(f"\n[*] Retrieving SSL configuration...")
+        try:
+            ssl_certs = SecurityCertificate.get_collection(
+                **{"svm.name": svm_name, "type": "server"}
+            )
+            
+            print(f"\n{'='*70}")
+            print(f"  SECURITY SSL SHOW - SVM: {svm_name}")
+            print(f"{'='*70}")
+            
+            ssl_list = []
+            for ssl_cert in ssl_certs:
+                ssl_cert.get()
+                ssl_info = {
+                    'vserver': svm_name,
+                    'certificate_name': ssl_cert.name if hasattr(ssl_cert, 'name') else 'N/A',
+                    'serial': ssl_cert.serial_number if hasattr(ssl_cert, 'serial_number') else 'N/A',
+                    'ca': ssl_cert.ca if hasattr(ssl_cert, 'ca') else 'N/A',
+                    'common_name': ssl_cert.common_name if hasattr(ssl_cert, 'common_name') else 'N/A'
+                }
+                ssl_list.append(ssl_info)
+                
+                print(f"\nVserver: {ssl_info['vserver']}")
+                print(f"  Certificate Name: {ssl_info['certificate_name']}")
+                print(f"  Serial: {ssl_info['serial']}")
+                print(f"  CA: {ssl_info['ca']}")
+                print(f"  Common Name: {ssl_info['common_name']}")
+            
+            print(f"\n{'='*70}")
+            print(f"[INFO] Total SSL certificates: {len(ssl_list)}")
+            
+            # Guardar en log
+            ssl_log = {
+                'operation': 'security_ssl_show',
+                'svm_name': svm_name,
+                'total_ssl_certs': len(ssl_list),
+                'ssl_certificates': ssl_list,
+                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            save_to_log('security_ssl_show', ssl_log)
+            
+        except Exception as ssl_error:
+            print(f"[WARNING] Could not retrieve SSL configuration: {str(ssl_error)}")
+        
         return True
     
     # ====================================================================
