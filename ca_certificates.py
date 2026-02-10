@@ -627,32 +627,81 @@ def modify_certificate(svm_name):
                 
                 print(f"[DEBUG] SVM UUID: {svm_uuid}")
                 
-                # Construir el endpoint y payload para SSL modify
-                url = f"https://{config.CONNECTION._host}/api/svm/svms/{svm_uuid}"
+                # Obtener host, username, password de la conexión
+                connection = config.CONNECTION
+                host = connection.origin if hasattr(connection, 'origin') else str(connection).split('@')[-1] if '@' in str(connection) else 'localhost'
                 
-                payload = {
-                    "certificate": {
-                        "uuid": certificate_data[0]['uuid']
-                    }
-                }
+                # Debug de la conexión
+                print(f"[DEBUG] Connection object type: {type(connection)}")
+                print(f"[DEBUG] Connection attributes: {dir(connection)}")
                 
-                # Realizar el PATCH request
-                response = requests.patch(
-                    url,
-                    json=payload,
-                    auth=(config.CONNECTION._username, config.CONNECTION._password),
-                    verify=False
-                )
-                
-                if response.status_code in [200, 201, 202]:
-                    print(f"[+] SSL certificate assignment successful!")
+                # Intentar diferentes formas de obtener el host
+                if hasattr(connection, 'origin'):
+                    host = connection.origin
+                elif hasattr(connection, '_origin'):
+                    host = connection._origin
+                elif hasattr(connection, 'host'):
+                    host = connection.host
                 else:
-                    print(f"[WARNING] SSL modify returned status {response.status_code}")
-                    print(f"[WARNING] Response: {response.text}")
+                    # Usar host del config.yaml como fallback
+                    print(f"[WARNING] Cannot determine host from connection, check debug info above")
+                    raise Exception("Cannot determine cluster host from connection object")
+                
+                print(f"[DEBUG] Cluster host: {host}")
+                
+                # Construir el endpoint y payload para SSL modify
+                url = f"https://{host}/api/svm/svms/{svm_uuid}"
+                
+                # Intentar diferentes payloads para encontrar el correcto
+                payloads_to_try = [
+                    {"certificate": {"uuid": certificate_data[0]['uuid']}},
+                    {"certificate": certificate_data[0]['uuid']},
+                    {"ssl": {"certificate": {"uuid": certificate_data[0]['uuid']}}},
+                ]
+                
+                print(f"[DEBUG] Testing SSL modify with certificate UUID: {certificate_data[0]['uuid']}")
+                
+                success = False
+                for idx, payload in enumerate(payloads_to_try):
+                    print(f"[DEBUG] Attempt {idx + 1}: Payload = {json.dumps(payload)}")
+                    
+                    # Obtener credenciales
+                    if hasattr(connection, '_username'):
+                        username = connection._username
+                        password = connection._password
+                    else:
+                        # Usar las del cluster_config que se pasaron originalmente
+                        print(f"[WARNING] Cannot get credentials from connection")
+                        break
+                    
+                    # Realizar el PATCH request
+                    response = requests.patch(
+                        url,
+                        json=payload,
+                        auth=(username, password),
+                        verify=False
+                    )
+                    
+                    print(f"[DEBUG] Response status: {response.status_code}")
+                    print(f"[DEBUG] Response body: {response.text[:200]}")
+                    
+                    if response.status_code in [200, 201, 202]:
+                        print(f"[+] SSL certificate assignment successful with payload #{idx + 1}!")
+                        success = True
+                        break
+                    else:
+                        print(f"[DEBUG] Attempt {idx + 1} failed with status {response.status_code}")
+                
+                if not success:
+                    print(f"[WARNING] All SSL modify attempts failed")
+                    print(f"[WARNING] Last response: {response.text if 'response' in locals() else 'N/A'}")
             
             except Exception as ssl_error:
                 print(f"[WARNING] Failed to modify SSL configuration")
                 print(f"[WARNING] Error: {str(ssl_error)}")
+                import traceback
+                print(f"[DEBUG] Full traceback:")
+                traceback.print_exc()
         
         # 2. Con el SEGUNDO certificado: security certificate delete
         if len(certificate_data) >= 2 and certificate_data[1]['serial_number']:
