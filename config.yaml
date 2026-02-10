@@ -7,7 +7,7 @@
 
 # CLUSTER CONNECTION SETTINGS
 cluster:
-  host: cluster1.demo.netapp.com            
+  host: cluster2.demo.netapp.com            
   username: admin
   password: "Netapp1!"
 
@@ -22,7 +22,7 @@ ssl:
 
 # CERTIFICATE SIGNING REQUEST (CSR) SETTINGS
 certificate:
-  common_name: cert
+  common_name: CERTIFICADO
   size: 2048  # Key size in bits (2048, 3072, 4096)
   algorithm: RSA
   hash_function: SHA256
@@ -48,7 +48,7 @@ certificate:
   
   # CERTIFICATE INSTALLATION SETTINGS (for option [2])
   # Paste your signed certificate and private key here
-  cert_name: rhoso  # Name for the certificate in ONTAP
+  cert_name: NO_RHOSO  # Name for the certificate in ONTAP
   type: server  # Certificate type (server, client, client-ca, server-ca, root-ca)
   
   # Paste your PUBLIC CERTIFICATE here (including BEGIN/END CERTIFICATE lines)

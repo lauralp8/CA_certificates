@@ -937,7 +937,7 @@ def execute_option(option, config_data):
         print("\n[*] Starting certificate modification workflow...")
         if modify_certificate(config_data['svm']['name'], cert_config):
             print("\n[SUCCESS] Certificate modification completed successfully!")
-            print("[+] SSL configuration has been updated")
+            print("[+] SSL modify command generated and saved")
         else:
             print("\n[ERROR] Failed to modify certificates")
             print("[ERROR] Check the error messages above and try again")
