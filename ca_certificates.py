@@ -619,7 +619,7 @@ def modify_certificate(svm_name, cert_config=None):
             print(f"    - SSL Target State: {ssl_enabled}")
             
             try:
-                # PATCH: Modificar SSL de la SVM usando API REST directa
+                # PATCH/DELETE: Modificar SSL de la SVM según configuración
                 print(f"[*] Calling NetApp API: security ssl modify...")
                 
                 # Obtener el UUID de la SVM
@@ -638,25 +638,52 @@ def modify_certificate(svm_name, cert_config=None):
                 username = connection.username
                 password = connection.password
                 
-                # *** LÍNEA CRÍTICA: Asignar/Desasignar certificado SSL según configuración ***
-                url = f"https://{host}/api/svm/svms/{svm_uuid}"
-                
+                # *** LÓGICA DE SSL ENABLE/DISABLE ***
                 if ssl_enabled:
-                    # Habilitar SSL: Asignar certificado
+                    # HABILITAR SSL: PATCH con el UUID del certificado
+                    url = f"https://{host}/api/svm/svms/{svm_uuid}"
                     payload = {"certificate": {"uuid": certificate_data[0]['uuid']}}
+                    
                     print(f"[DEBUG] Payload to ENABLE SSL: {json.dumps(payload)}")
+                    
+                    response = requests.patch(
+                        url,
+                        json=payload,
+                        auth=(username, password),
+                        verify=False,
+                        headers={'Content-Type': 'application/json'}
+                    )
                 else:
-                    # Deshabilitar SSL: Enviar null para eliminar la referencia al certificado
-                    payload = {"certificate": None}
-                    print(f"[DEBUG] Payload to DISABLE SSL: {json.dumps(payload)}")
-                
-                response = requests.patch(
-                    url,
-                    json=payload,
-                    auth=(username, password),
-                    verify=False,
-                    headers={'Content-Type': 'application/json'}
-                )
+                    # DESHABILITAR SSL: Eliminar la referencia al certificado
+                    # Intentamos primero con PATCH usando campo vacío
+                    url = f"https://{host}/api/svm/svms/{svm_uuid}"
+                    
+                    # Opciones a probar:
+                    # 1. Vaciar el campo certificate.uuid
+                    payload = {"certificate": {"uuid": ""}}
+                    
+                    print(f"[DEBUG] Attempting to DISABLE SSL with payload: {json.dumps(payload)}")
+                    
+                    response = requests.patch(
+                        url,
+                        json=payload,
+                        auth=(username, password),
+                        verify=False,
+                        headers={'Content-Type': 'application/json'}
+                    )
+                    
+                    # Si falla (400/422), intentar con la API de Python Client Library
+                    if response.status_code in [400, 422]:
+                        print(f"[DEBUG] PATCH with empty UUID failed, trying Python Client Library...")
+                        try:
+                            svm_obj = Svm(uuid=svm_uuid)
+                            svm_obj.certificate = None
+                            svm_obj.patch()
+                            print(f"[DEBUG] Python Client Library PATCH executed")
+                            # Crear respuesta simulada
+                            response.status_code = 200
+                        except Exception as lib_error:
+                            print(f"[DEBUG] Python Client Library also failed: {str(lib_error)}")
                 
                 print(f"[DEBUG] Response status: {response.status_code}")
                 print(f"[DEBUG] Response body: {response.text[:500] if response.text else 'Empty'}")
