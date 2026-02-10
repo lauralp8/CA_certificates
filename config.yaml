@@ -79,9 +79,6 @@ certificate:
     Vts6864u6nbZ8/KNFaI5pTpWSOLI6zg01iEZIrAbcGDx0dFEEFcwnSCIEkXHemU8
     mob9tN6zDby6FsXPuOHO7A==
     -----END CERTIFICATE-----
-
-    
-
       
   # Paste your PRIVATE KEY here (including BEGIN/END PRIVATE KEY lines)
   private_key: |
@@ -113,6 +110,5 @@ certificate:
     qt/LEDL5/C72j0E8w1ALrKhX99MhwVnwc0z2P58cfFqsQqHUD2WzwTkG5c6QP+YY
     KDkLBcZAq7ztykc5o7whpOIo
     -----END PRIVATE KEY-----
-    
 
 
