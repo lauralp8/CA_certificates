@@ -781,14 +781,16 @@ def install_certificate(cert_config, svm_name):
         print(f"\n[DEBUG] Certificate validation:")
         print(f"    - Starts with '-----BEGIN': {public_cert.strip().startswith('-----BEGIN')}")
         print(f"    - Ends with '-----END': {public_cert.strip().endswith('-----')}")
-        print(f"    - Contains newlines: {'\\n' in public_cert}")
+        has_newlines = '\n' in public_cert
+        print(f"    - Contains newlines: {has_newlines}")
         print(f"    - First 50 chars: {repr(public_cert[:50])}")
         print(f"    - Last 50 chars: {repr(public_cert[-50:])}")
         
         print(f"\n[DEBUG] Private Key validation:")
         print(f"    - Starts with '-----BEGIN': {private_key.strip().startswith('-----BEGIN')}")
         print(f"    - Ends with '-----END': {private_key.strip().endswith('-----')}")
-        print(f"    - Contains newlines: {'\\n' in private_key}")
+        key_has_newlines = '\n' in private_key
+        print(f"    - Contains newlines: {key_has_newlines}")
         print(f"    - First 50 chars: {repr(private_key[:50])}")
         print(f"    - Last 50 chars: {repr(private_key[-50:])}")
         
