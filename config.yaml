@@ -7,13 +7,13 @@
 
 # CLUSTER CONNECTION SETTINGS
 cluster:
-  host: cluster2.demo.netapp.com            
+  host: cluster1.demo.netapp.com            
   username: admin
   password: "Netapp1!"
 
 # STORAGE VIRTUAL MACHINE (SVM) SETTINGS
 svm:
-  name: cluster2-01
+  name: cluster1-01
 
 # SSL CONFIGURATION SETTINGS (for certificate modification)
 ssl:
