@@ -13,7 +13,7 @@ cluster:
 
 # STORAGE VIRTUAL MACHINE (SVM) SETTINGS
 svm:
-  name: cluster1-01
+  name: svm1_cluster1
 
 # SSL CONFIGURATION SETTINGS (for certificate modification)
 ssl:
