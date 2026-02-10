@@ -47,68 +47,12 @@ certificate:
   #   - keyEncipherment
   
   # CERTIFICATE INSTALLATION SETTINGS (for option [2])
-  # Paste your signed certificate and private key here
+  # Specify paths to certificate files (relative or absolute)
   cert_name: rhoso  # Name for the certificate in ONTAP
   type: server  # Certificate type (server, client, client-ca, server-ca, root-ca)
   
-  # Paste your PUBLIC CERTIFICATE here (including BEGIN/END CERTIFICATE lines)
-  public_certificate: |-
-    -----BEGIN CERTIFICATE-----
-    MIIEXDCCAkSgAwIBAgIUAyOSU6IpjRwZHpubBk8mljgFIcEwDQYJKoZIhvcNAQEL
-    BQAwRzELMAkGA1UEBhMCRVMxDjAMBgNVBAoMBU1pTGFiMRIwEAYDVQQLDAlPTlRB
-    UC1MYWIxFDASBgNVBAMMC01pLUNBLU9OVEFQMB4XDTI2MDIxMDEyMTUzMFoXDTI4
-    MDUxNTEyMTUzMFowRTEUMBIGA1UEAxMLY2VydGlmaWNhdGUxCzAJBgNVBAYTAkVT
-    MQ8wDQYDVQQIEwZDT1JVTkExDzANBgNVBAcTBkNPUlVOQTCCASIwDQYJKoZIhvcN
-    AQEBBQADggEPADCCAQoCggEBALZ8K5SUNK8KBG6eG27EIi65dRP/yG/KKHdEoD0K
-    r3WacUSWrrrKb4UjoXngtLwxEJedey7fY+a7qqWsmVm4BWiQysd8H7Aj2UUBPdxo
-    WPPLmcsFvO8NCQuXajP2yB1INM946lqC1RckzctQMlJUxeL62ZVd2fD3+rc+VwYz
-    575M8ccL2U6eDRsa8qVrd+2zahwFKdmoPoQDVR+DmRvwoD5UAg7wdg3i/n4TrCwi
-    wUZo4MKxe96Z0dA/u+e9XXLt3x0N69FVePG8/BiLLjIlXPmlHy/VPuxcVWn38sC3
-    5jMaDR/BTzWeGORgaJAElZj7rBNeTbfTyvCqrgEtuR209dsCAwEAAaNCMEAwHQYD
-    VR0OBBYEFAEtZ1osY/ZNp0/vm4bbzQ5iC7fQMB8GA1UdIwQYMBaAFDhW18NASzGK
-    saHg4e9D0rnHGfg/MA0GCSqGSIb3DQEBCwUAA4ICAQBz33FYZZgcU+l7dD/BouWb
-    IiJhpjf5nEzIBZ1lkXyVf5jgHum4m9pIViqnU4z1Z9ItrSRgFNeaeUk/EzkSe1eg
-    CQTu1gjlxFY1oinTZEpXHC151HzvqCPCm0OF7D51189yTCKyaMnPhN7mK3olnPPF
-    oBx0BU8ipEibNDJxwch/dTvCJ499AgCSQAjCdunNamDeBk38ccGRJkuD/GJ/uhRI
-    mG1eB1SwO1Z2V0/o5GQ9VjdxzifsaGlQrub2LByTp9qfCHEEoba3tKlrjnYqV9TD
-    pu459J8jExxd/L79ueH0ReVCWuD772pCvvfKSAN5PMQj3sMEI4lzKCSBbdnbH4JM
-    w9xHGqbf6ddpzLgFOLw9mHt4pf/t+hDqJIWFAyCi9j0yT7H8XZu4Gh7/FRIDWb/S
-    Ctgnoph/yj+hvHnggWoQE3rzyTZqhe3FpTXU2kMGhZ7/zttWA7AVgOzQ2bfXnKOn
-    vp93FdSy25CPq3BDb3PXaX6+KoRnuiA9E6Ko/kap8M2vUruaUOZv7XXpqVZCzcvJ
-    GtR0TpLh8VD4hsda4u6HUUzsGeWArdFwWY/K8ZBSr/Osv5R09jMhDSEd4Kdg4E3Y
-    Vts6864u6nbZ8/KNFaI5pTpWSOLI6zg01iEZIrAbcGDx0dFEEFcwnSCIEkXHemU8
-    mob9tN6zDby6FsXPuOHO7A==
-    -----END CERTIFICATE-----
-      
-  # Paste your PRIVATE KEY here (including BEGIN/END PRIVATE KEY lines)
-  private_key: |-
-    -----BEGIN PRIVATE KEY-----
-    MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC2fCuUlDSvCgRu
-    nhtuxCIuuXUT/8hvyih3RKA9Cq91mnFElq66ym+FI6F54LS8MRCXnXsu32Pmu6ql
-    rJlZuAVokMrHfB+wI9lFAT3caFjzy5nLBbzvDQkLl2oz9sgdSDTPeOpagtUXJM3L
-    UDJSVMXi+tmVXdnw9/q3PlcGM+e+TPHHC9lOng0bGvKla3fts2ocBSnZqD6EA1Uf
-    g5kb8KA+VAIO8HYN4v5+E6wsIsFGaODCsXvemdHQP7vnvV1y7d8dDevRVXjxvPwY
-    iy4yJVz5pR8v1T7sXFVp9/LAt+YzGg0fwU81nhjkYGiQBJWY+6wTXk2308rwqq4B
-    LbkdtPXbAgMBAAECggEAD3WVe5DSpcGDfpuGV2vmOW8crAUPRekqZHA74u/0zVG4
-    JsddJhXgPLc4BssyhH7jmPSOavohzHo5iq+EjkU4sBMUGrI5PQLMdTwVsYZlgsHM
-    1ZY220mPapv5M03ExjZHwwvLTr+mrb9Ab+jrWm40FXaK2EyLGg7n/n4ZgT0EdOqL
-    IP4r1dihWf2Lgl9+PtVv68hDkng+B/dTwozc5XjMxG7SRoIXH4NUXauc218P1R3S
-    MW/vfGecjygsjlH4XyU7MFq+hwQAAwqXIJxcMkieXEL6W32tMRzYT60fo747mnLr
-    eDubu1shJIkbB5GdIuf9Zhq12jtCzDhj6P3NHTQgAQKBgQDlivpX1245aWnI7oIB
-    LHZ01wpISK03vfikwstsV2b5wim90tlFgUE4Bs6klX0t5T2xu+ONcBguFSvd5d2h
-    9X03ZgWR9A5Q1G1k3aRon5DLeh+WOJs9AgUr20HZIqXEgRrziFxKUnrUSzFHyzIa
-    w82nQFVwxU3lRsa9rNLC+cvI2wKBgQDLhK1RU5Gdt6Ua9pbOn96VTjGBKeNlMj6H
-    VJNQEnoN5d34ACGgnR5GyeYcqUddVLwvD48uDA7f6hNTv4tR8KPSPz5CLNaxv92C
-    Dnm7TnwxXYX3svuizRr4SdmLMPtKm+6YtVDqvqvp3sxKDUbT5G+qKzDjW/hivI5a
-    gIqiRFCXAQKBgQCesOI58FnnnxTfMOT34sFSLYiSSIxYSSGo5nK0SAiNCsrIzQgg
-    oSdxkGM0LZUJMb7hLUA3/BL7aO+WzN/YpFsY/ZNEQDHVd8bZQNH08rursJY9yIyq
-    NMdWdpKjhuyLWaZETzVevH7mXcWIGNZe4pc+1Z88A2vC4pdrchuTaBaWmQKBgB71
-    KqwRSzgzhDDqy5vYo7IQd+VO6uEs2GgbjGEEvn44tiAQXQ0ieUWJVrCLa2ieCBYc
-    hsoZWXXkFFaL73RiZ3kG18CXM31MUzSCYTAFy0xzDnrURgTIsE6OZUIQDFmYCJ5A
-    DnP21w23L1ogVOLMf9PhyAj9p3XVes33eZ8fRycBAoGBAJXIXJjVsNSuGT7/0gg1
-    zcMsiQEPGVbm5vZa62nGpuGuk392wcssfI6M5mxT1e+ilaXt+ynGCxZs7FB6dW6P
-    qt/LEDL5/C72j0E8w1ALrKhX99MhwVnwc0z2P58cfFqsQqHUD2WzwTkG5c6QP+YY
-    KDkLBcZAq7ztykc5o7whpOIo
-    -----END PRIVATE KEY-----
+  # Path to your certificate files
+  public_certificate_file: public_certificate.crt
+  private_key_file: private_key.key
 
 

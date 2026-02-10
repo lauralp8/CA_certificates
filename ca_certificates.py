@@ -755,7 +755,7 @@ def install_certificate(cert_config, svm_name):
         print(f"\n[*] Starting certificate installation workflow...")
         
         # Validar campos requeridos
-        required_fields = ['cert_name', 'public_certificate', 'private_key']
+        required_fields = ['cert_name']
         missing_fields = [field for field in required_fields if field not in cert_config or not cert_config[field]]
         
         if missing_fields:
@@ -764,13 +764,43 @@ def install_certificate(cert_config, svm_name):
             return False
         
         cert_name = cert_config['cert_name']
-        public_cert = cert_config['public_certificate']
-        private_key = cert_config['private_key']
-        
-        # Obtener tipo de certificado (por defecto: server)
         cert_type = cert_config.get('type', 'server')
         
-        print(f"[+] Certificate installation details:")
+        # Leer certificado y clave desde archivos
+        public_cert_file = cert_config.get('public_certificate_file', 'public_certificate.crt')
+        private_key_file = cert_config.get('private_key_file', 'private_key.key')
+        
+        print(f"[+] Reading certificate files:")
+        print(f"    - Public Certificate: {public_cert_file}")
+        print(f"    - Private Key: {private_key_file}")
+        
+        # Leer el certificado público
+        try:
+            with open(public_cert_file, 'r', encoding='utf-8') as f:
+                public_cert = f.read().strip()
+            print(f"[+] Public certificate loaded ({len(public_cert)} characters)")
+        except FileNotFoundError:
+            print(f"[ERROR] Public certificate file not found: {public_cert_file}")
+            print(f"[ERROR] Please create the file with your certificate")
+            return False
+        except Exception as e:
+            print(f"[ERROR] Error reading public certificate: {str(e)}")
+            return False
+        
+        # Leer la clave privada
+        try:
+            with open(private_key_file, 'r', encoding='utf-8') as f:
+                private_key = f.read().strip()
+            print(f"[+] Private key loaded ({len(private_key)} characters)")
+        except FileNotFoundError:
+            print(f"[ERROR] Private key file not found: {private_key_file}")
+            print(f"[ERROR] Please create the file with your private key")
+            return False
+        except Exception as e:
+            print(f"[ERROR] Error reading private key: {str(e)}")
+            return False
+        
+        print(f"\n[+] Certificate installation details:")
         print(f"    - SVM: {svm_name}")
         print(f"    - Certificate Name: {cert_name}")
         print(f"    - Type: {cert_type}")
