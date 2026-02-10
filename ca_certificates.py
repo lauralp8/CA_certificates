@@ -619,7 +619,7 @@ def modify_certificate(svm_name, cert_config=None):
             print(f"    - SSL Target State: {ssl_enabled}")
             
             try:
-                # PATCH/DELETE: Modificar SSL de la SVM según configuración
+                # PATCH: Modificar SSL de la SVM según configuración
                 print(f"[*] Calling NetApp API: security ssl modify...")
                 
                 # Obtener el UUID de la SVM
@@ -632,105 +632,37 @@ def modify_certificate(svm_name, cert_config=None):
                 if not svm_uuid:
                     raise Exception(f"SVM {svm_name} not found")
                 
-                # Obtener conexión y credenciales
-                connection = config.CONNECTION
-                host = connection.origin.replace('https://', '').replace('http://', '').split(':')[0]
-                username = connection.username
-                password = connection.password
+                # *** MODIFICAR SSL USANDO LIBRERÍA PYTHON CLIENT DE NETAPP ***
+                # Obtener el objeto SVM completo
+                svm_obj = Svm(uuid=svm_uuid)
+                svm_obj.get()
                 
-                # *** LÓGICA DE SSL ENABLE/DISABLE ***
                 if ssl_enabled:
-                    # HABILITAR SSL: PATCH con el UUID del certificado
-                    url = f"https://{host}/api/svm/svms/{svm_uuid}"
-                    payload = {"certificate": {"uuid": certificate_data[0]['uuid']}}
-                    
-                    print(f"[DEBUG] Payload to ENABLE SSL: {json.dumps(payload)}")
-                    
-                    response = requests.patch(
-                        url,
-                        json=payload,
-                        auth=(username, password),
-                        verify=False,
-                        headers={'Content-Type': 'application/json'}
-                    )
+                    # HABILITAR SSL: Asignar el certificado a la SVM
+                    print(f"[DEBUG] Enabling SSL with certificate UUID: {certificate_data[0]['uuid']}")
+                    svm_obj.certificate = {"uuid": certificate_data[0]['uuid']}
                 else:
-                    # DESHABILITAR SSL: Eliminar la referencia al certificado
-                    # Intentamos primero con PATCH usando campo vacío
-                    url = f"https://{host}/api/svm/svms/{svm_uuid}"
-                    
-                    # Opciones a probar:
-                    # 1. Vaciar el campo certificate.uuid
-                    payload = {"certificate": {"uuid": ""}}
-                    
-                    print(f"[DEBUG] Attempting to DISABLE SSL with payload: {json.dumps(payload)}")
-                    
-                    response = requests.patch(
-                        url,
-                        json=payload,
-                        auth=(username, password),
-                        verify=False,
-                        headers={'Content-Type': 'application/json'}
-                    )
-                    
-                    # Si falla (400/422), intentar con la API de Python Client Library
-                    if response.status_code in [400, 422]:
-                        print(f"[DEBUG] PATCH with empty UUID failed, trying Python Client Library...")
-                        try:
-                            svm_obj = Svm(uuid=svm_uuid)
-                            svm_obj.certificate = None
-                            svm_obj.patch()
-                            print(f"[DEBUG] Python Client Library PATCH executed")
-                            # Crear respuesta simulada
-                            response.status_code = 200
-                        except Exception as lib_error:
-                            print(f"[DEBUG] Python Client Library also failed: {str(lib_error)}")
+                    # DESHABILITAR SSL: Eliminar la asignación del certificado
+                    print(f"[DEBUG] Disabling SSL by removing certificate assignment")
+                    # Crear un objeto con el campo certificate explícitamente vacío
+                    # Usamos un diccionario vacío que la API interpretará como "eliminar"
+                    svm_obj.certificate = {"uuid": None}
                 
-                print(f"[DEBUG] Response status: {response.status_code}")
-                print(f"[DEBUG] Response body: {response.text[:500] if response.text else 'Empty'}")
+                # Ejecutar el PATCH
+                print(f"[DEBUG] Executing SVM PATCH operation...")
+                svm_obj.patch()
                 
-                if response.status_code in [200, 201, 202, 204]:
-                    ssl_state = "true" if ssl_enabled else "false"
-                    print(f"[+] SSL configuration update request sent!")
-                    
-                    # Si es 202, hay un job en background - consultarlo
-                    if response.status_code == 202 and response.text:
-                        try:
-                            job_data = response.json()
-                            if 'job' in job_data and 'uuid' in job_data['job']:
-                                job_uuid = job_data['job']['uuid']
-                                print(f"[*] Job UUID: {job_uuid}")
-                                print(f"[*] Checking job status...")
-                                
-                                # Consultar el estado del job
-                                import time
-                                time.sleep(2)  # Esperar 2 segundos
-                                
-                                job_url = f"https://{host}/api/cluster/jobs/{job_uuid}"
-                                job_response = requests.get(
-                                    job_url,
-                                    auth=(username, password),
-                                    verify=False
-                                )
-                                
-                                if job_response.status_code == 200:
-                                    job_info = job_response.json()
-                                    print(f"[DEBUG] Job state: {job_info.get('state', 'unknown')}")
-                                    print(f"[DEBUG] Job message: {job_info.get('message', 'N/A')}")
-                                    
-                                    if job_info.get('state') == 'failure':
-                                        print(f"[ERROR] Job failed!")
-                                        print(f"[ERROR] Job details: {json.dumps(job_info, indent=2)}")
-                                    elif job_info.get('state') == 'success':
-                                        print(f"[+] Job completed successfully!")
-                                    else:
-                                        print(f"[WARNING] Job state: {job_info.get('state')}")
-                        except Exception as job_err:
-                            print(f"[WARNING] Could not check job status: {str(job_err)}")
-                    
-                    print(f"[+] Expected SSL Server Authentication Enabled: {ssl_state}")
+                ssl_state = "true" if ssl_enabled else "false"
+                print(f"[+] SSL configuration updated successfully!")
+                print(f"[+] SSL Server Authentication Enabled: {ssl_state}")
+            
+            except NetAppRestError as ssl_error:
+                print(f"[WARNING] NetApp API error during SSL modification")
+                print(f"[WARNING] HTTP Status: {ssl_error.status_code}")
+                if ssl_error.http_err_response and ssl_error.http_err_response.http_response:
+                    print(f"[WARNING] Details: {ssl_error.http_err_response.http_response.text}")
                 else:
-                    print(f"[WARNING] SSL modify returned status {response.status_code}")
-                    print(f"[WARNING] Response: {response.text}")
+                    print(f"[WARNING] Details: {str(ssl_error)}")
             
             except Exception as ssl_error:
                 print(f"[WARNING] Failed to modify SSL configuration")
