@@ -495,24 +495,25 @@ def csr_generate(cert_config):
 # CERTIFICATE MODIFICATION FUNCTION
 # ============================================================================
 
-def modify_certificate(svm_name):
+def modify_certificate(svm_name, cert_config=None):
     """
     Modifica certificados en NetApp ONTAP
     
     Equivalente a:
     security certificate show -vserver <svm> -instance
-    security ssl modify -vserver <svm> -common-name <cn> -serial <serial1> -server-enabled true
+    security ssl modify -vserver <svm> -common-name <cn> -serial <serial1> -server-enabled true/false
     security certificate delete -type server -vserver <svm> -serial <serial2> -common-name <cn>
     security ssl show -vserver <svm>
     
     Muestra los certificados de una SVM, filtra los que tienen common_name
     y certificate_name, extrae los Serial Numbers, y realiza operaciones:
-    - Primer certificado: Habilita SSL (security ssl modify)
+    - Primer certificado: Habilita/Deshabilita SSL según config (security ssl modify)
     - Segundo certificado: Elimina el certificado (security certificate delete)
     - Muestra la configuración SSL final
     
     Args:
         svm_name: Nombre de la SVM para filtrar certificados
+        cert_config: Diccionario con configuración (opcional, incluye ssl_enabled)
     
     Returns:
         bool: True si se ejecutó exitosamente, False si hubo error
@@ -602,11 +603,16 @@ def modify_certificate(svm_name):
             return False
         
         # OPERACIONES CON LOS CERTIFICADOS
-        # 1. Con el PRIMER certificado: security ssl modify -server-enabled true
+        # 1. Con el PRIMER certificado: security ssl modify -server-enabled true/false
         if len(certificate_data) >= 1 and certificate_data[0]['serial_number']:
-            print(f"\n[*] Operation 1: Enabling SSL for first certificate...")
+            # Obtener configuración SSL (por defecto: true si no se especifica)
+            ssl_enabled = cert_config.get('ssl_enabled', True) if cert_config else True
+            
+            action = "Enabling" if ssl_enabled else "Disabling"
+            print(f"\n[*] Operation 1: {action} SSL for first certificate...")
             print(f"    - Common Name: {certificate_data[0]['common_name']}")
             print(f"    - Serial Number: {certificate_data[0]['serial_number']}")
+            print(f"    - SSL Target State: {ssl_enabled}")
             
             try:
                 # PATCH: Modificar SSL de la SVM usando API REST directa
@@ -628,9 +634,15 @@ def modify_certificate(svm_name):
                 username = connection.username
                 password = connection.password
                 
-                # *** LÍNEA CRÍTICA: Asignar certificado SSL a la SVM (habilita SSL) ***
+                # *** LÍNEA CRÍTICA: Asignar/Desasignar certificado SSL según configuración ***
                 url = f"https://{host}/api/svm/svms/{svm_uuid}"
-                payload = {"certificate": {"uuid": certificate_data[0]['uuid']}}
+                
+                if ssl_enabled:
+                    # Habilitar SSL: Asignar certificado
+                    payload = {"certificate": {"uuid": certificate_data[0]['uuid']}}
+                else:
+                    # Deshabilitar SSL: Desasignar certificado (null o {})
+                    payload = {"certificate": None}
                 
                 response = requests.patch(
                     url,
@@ -641,8 +653,9 @@ def modify_certificate(svm_name):
                 )
                 
                 if response.status_code in [200, 201, 202, 204]:
-                    print(f"[+] SSL certificate assigned successfully!")
-                    print(f"[+] SSL Server Authentication Enabled: true")
+                    ssl_state = "true" if ssl_enabled else "false"
+                    print(f"[+] SSL configuration updated successfully!")
+                    print(f"[+] SSL Server Authentication Enabled: {ssl_state}")
                 else:
                     print(f"[WARNING] SSL modify returned status {response.status_code}")
                     print(f"[WARNING] Response: {response.text}")
@@ -1071,12 +1084,15 @@ def execute_option(option, config_data):
             print("[ERROR] Add 'name' field in 'svm' section")
             return True
         
+        # Obtener configuración de certificado (opcional)
+        cert_config = config_data.get('certificate', {})
+        
         print("\n[*] Starting certificate modification workflow...")
-        if modify_certificate(config_data['svm']['name']):
-            print("\n[SUCCESS] Certificate query completed successfully!")
-            print("[+] Serial numbers have been extracted and displayed")
+        if modify_certificate(config_data['svm']['name'], cert_config):
+            print("\n[SUCCESS] Certificate modification completed successfully!")
+            print("[+] SSL configuration has been updated")
         else:
-            print("\n[ERROR] Failed to query certificates")
+            print("\n[ERROR] Failed to modify certificates")
             print("[ERROR] Check the error messages above and try again")
         
         return True

@@ -28,6 +28,9 @@ certificate:
   state: CORUNA
   locality: CORUNA
   dns_name: certificate
+  
+  # SSL CONFIGURATION (for option [3] modify certificate)
+  ssl_enabled: false  # Set to true to enable SSL, false to disable SSL
   # Optional fields:
   # organization: My Organization
   # organizational_unit: IT Department
