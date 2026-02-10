@@ -625,8 +625,12 @@ def get_serial_numbers(svm_name):
             print(f"\n[+] Serial Numbers:")
             print(f"")
             
-            for idx, serial in enumerate(serial_numbers, 1):
-                print(f"    [{idx}] {serial}")
+            # Imprimir serial numbers con su etiqueta (certificate name)
+            idx = 1
+            for cert_detail in certificate_details:
+                if cert_detail['serial_number']:
+                    print(f"    [{idx}] {cert_detail['serial_number']} - Certificate Name: {cert_detail['certificate_name']}")
+                    idx += 1
             
             print(f"\n{'='*70}")
             

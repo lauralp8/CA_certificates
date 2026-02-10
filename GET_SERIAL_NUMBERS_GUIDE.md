@@ -78,8 +78,8 @@ Certificates with serial numbers: 2
 
 [+] Serial Numbers:
 
-    [1] 1A2B3C4D5E6F7G8H
-    [2] 9H8G7F6E5D4C3B2A
+    [1] 1A2B3C4D5E6F7G8H - Certificate Name: rhoso
+    [2] 9H8G7F6E5D4C3B2A - Certificate Name: default-ca
 
 ======================================================================
 

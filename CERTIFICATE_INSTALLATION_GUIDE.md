@@ -122,6 +122,6 @@ security certificate install -vserver svm_1_cluster -type server -cert-name rhos
   # Enter private key: <pega private_key.key>
   # Continue with root/intermediate certificates? n
 
-# 3. Ver certificados instalados
-security certificate show -vserver svm_1_cluster
+# 3. Ver certificados instalados (lo hace la Opción 3)
+security certificate show -vserver svm_1_cluster -instance
 ```
