@@ -32,6 +32,7 @@ from netapp_ontap.resources import Svm
 import yaml
 import json
 import os
+import requests
 from datetime import datetime
 
 
@@ -606,24 +607,45 @@ def modify_certificate(svm_name):
             print(f"\n[*] Operation 1: Enabling SSL for first certificate...")
             print(f"    - Common Name: {certificate_data[0]['common_name']}")
             print(f"    - Serial Number: {certificate_data[0]['serial_number']}")
+            print(f"    - Certificate UUID: {certificate_data[0]['uuid']}")
             
             try:
-                # PATCH: Modificar SSL de la SVM
+                # PATCH: Modificar SSL de la SVM usando API REST directa
                 print(f"[*] Calling NetApp API: security ssl modify...")
                 
-                svm = Svm(name=svm_name)
-                svm.certificate = {
-                    "uuid": certificate_data[0]['uuid']
-                }
-                svm.patch()
+                # Obtener el UUID de la SVM primero
+                svm_obj = Svm(name=svm_name)
+                svm_obj.get()
+                svm_uuid = svm_obj.uuid
                 
-                print(f"[+] SSL configuration updated successfully!")
+                # Construir el endpoint y payload para SSL modify
+                # Endpoint: /api/security/authentication/cluster/ad-proxy o /api/svm/svms/{svm.uuid}
+                # Usamos el endpoint de SVM para modificar el certificado SSL
+                url = f"https://{config.CONNECTION._host}/api/svm/svms/{svm_uuid}"
+                
+                payload = {
+                    "certificate": {
+                        "uuid": certificate_data[0]['uuid']
+                    }
+                }
+                
+                # Realizar el PATCH request
+                response = requests.patch(
+                    url,
+                    json=payload,
+                    auth=(config.CONNECTION._username, config.CONNECTION._password),
+                    verify=False
+                )
+                
+                if response.status_code in [200, 201, 202]:
+                    print(f"[+] SSL certificate assignment successful!")
+                else:
+                    print(f"[WARNING] SSL modify returned status {response.status_code}")
+                    print(f"[WARNING] Response: {response.text}")
             
-            except NetAppRestError as ssl_error:
+            except Exception as ssl_error:
                 print(f"[WARNING] Failed to modify SSL configuration")
-                print(f"[WARNING] HTTP Status: {ssl_error.status_code}")
-                if ssl_error.http_err_response and ssl_error.http_err_response.http_response:
-                    print(f"[WARNING] Details: {ssl_error.http_err_response.http_response.text}")
+                print(f"[WARNING] Error: {str(ssl_error)}")
         
         # 2. Con el SEGUNDO certificado: security certificate delete
         if len(certificate_data) >= 2 and certificate_data[1]['serial_number']:
@@ -652,6 +674,7 @@ def modify_certificate(svm_name):
         print(f"[*] Calling NetApp API: security ssl show -vserver {svm_name}")
         
         try:
+            # Obtener información de la SVM incluyendo el certificado SSL
             svm_ssl = Svm(name=svm_name)
             svm_ssl.get(fields="certificate,uuid,name")
             
@@ -661,14 +684,24 @@ def modify_certificate(svm_name):
             print(f"SVM Name: {svm_ssl.name}")
             print(f"SVM UUID: {svm_ssl.uuid}")
             
+            ssl_enabled = "Unknown"
+            cert_name = None
+            cert_uuid = None
+            
             if hasattr(svm_ssl, 'certificate') and svm_ssl.certificate:
+                ssl_enabled = "true"
+                print(f"\nSSL Server Authentication Enabled: {ssl_enabled}")
                 print(f"\nSSL Certificate Configuration:")
                 if hasattr(svm_ssl.certificate, 'name'):
-                    print(f"  Certificate Name: {svm_ssl.certificate.name}")
+                    cert_name = svm_ssl.certificate.name
+                    print(f"  Certificate Name: {cert_name}")
                 if hasattr(svm_ssl.certificate, 'uuid'):
-                    print(f"  Certificate UUID: {svm_ssl.certificate.uuid}")
+                    cert_uuid = svm_ssl.certificate.uuid
+                    print(f"  Certificate UUID: {cert_uuid}")
             else:
-                print(f"\nNo SSL certificate configured")
+                ssl_enabled = "false"
+                print(f"\nSSL Server Authentication Enabled: {ssl_enabled}")
+                print(f"No SSL certificate configured")
             
             print(f"{'='*110}\n")
             
@@ -676,10 +709,11 @@ def modify_certificate(svm_name):
             ssl_config_data = {
                 'svm_name': svm_name,
                 'svm_uuid': svm_ssl.uuid,
+                'ssl_enabled': ssl_enabled,
                 'certificate': {
-                    'name': svm_ssl.certificate.name if hasattr(svm_ssl, 'certificate') and hasattr(svm_ssl.certificate, 'name') else None,
-                    'uuid': svm_ssl.certificate.uuid if hasattr(svm_ssl, 'certificate') and hasattr(svm_ssl.certificate, 'uuid') else None
-                } if hasattr(svm_ssl, 'certificate') else None,
+                    'name': cert_name,
+                    'uuid': cert_uuid
+                } if cert_name else None,
                 'query_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             
@@ -689,6 +723,11 @@ def modify_certificate(svm_name):
         except NetAppRestError as ssl_show_error:
             print(f"[WARNING] Failed to retrieve SSL configuration")
             print(f"[WARNING] HTTP Status: {ssl_show_error.status_code}")
+            if ssl_show_error.http_err_response and ssl_show_error.http_err_response.http_response:
+                print(f"[WARNING] Details: {ssl_show_error.http_err_response.http_response.text}")
+        
+        except Exception as e:
+            print(f"[WARNING] Unexpected error retrieving SSL config: {str(e)}")
         
         print(f"\n[SUCCESS] Certificate modification workflow completed!")
         
