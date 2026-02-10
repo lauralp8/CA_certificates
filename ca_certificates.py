@@ -602,6 +602,83 @@ def modify_certificate(svm_name, cert_config=None):
             print(f"\n[WARNING] No serial numbers found in the certificates")
             return False
         
+        # SECURITY SSL MODIFY: Modificar SSL para el primer certificado
+        if len(serial_numbers) > 0 and cert_config:
+            first_serial = serial_numbers[0]
+            first_cert = certificate_data[0]
+            
+            # Obtener parámetros de configuración
+            ssl_config = cert_config.get('ssl', {})
+            ca_name = ssl_config.get('ca_name')
+            server_enabled = ssl_config.get('server_enabled', True)
+            common_name = first_cert.get('common_name')
+            
+            if ca_name and common_name:
+                print(f"\n[*] Executing security ssl modify command...")
+                print(f"[*] Parameters:")
+                print(f"    - Vserver: {svm_name}")
+                print(f"    - CA: {ca_name}")
+                print(f"    - Common Name: {common_name}")
+                print(f"    - Serial Number: {first_serial}")
+                print(f"    - Server Enabled: {server_enabled}")
+                
+                try:
+                    # Construir el comando usando la API REST de NetApp
+                    # Equivalente a: security ssl modify -vserver <svm> -ca <ca> -common-name <cn> -serial <serial> -server-enabled <true/false>
+                    
+                    # NetApp ONTAP REST API para SSL usa el endpoint /api/security/authentication/cluster/ad-proxy
+                    # o directamente configuración SSL a través de SecurityConfig
+                    # Sin embargo, la modificación SSL no tiene un recurso directo en netapp_ontap library
+                    # Usaremos la API REST directamente
+                    
+                    from netapp_ontap import config as ontap_config
+                    import requests
+                    import json
+                    
+                    # Construir URL del endpoint
+                    cluster_url = f"https://{ontap_config.CONNECTION.origin}"
+                    api_url = f"{cluster_url}/api/security/certificates/{first_cert['uuid']}"
+                    
+                    # Preparar headers
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                    
+                    # Preparar el body para PATCH
+                    ssl_body = {
+                        'ca': ca_name,
+                        'server_enabled': server_enabled
+                    }
+                    
+                    # Realizar PATCH request
+                    response = requests.patch(
+                        api_url,
+                        auth=(ontap_config.CONNECTION.username, ontap_config.CONNECTION.password),
+                        headers=headers,
+                        json=ssl_body,
+                        verify=False
+                    )
+                    
+                    if response.status_code in [200, 201, 202, 204]:
+                        print(f"\n[+] SSL configuration modified successfully!")
+                        print(f"[+] Certificate {common_name} (Serial: {first_serial}) updated")
+                        print(f"[+] Server enabled: {server_enabled}")
+                    else:
+                        print(f"\n[WARNING] SSL modification returned status: {response.status_code}")
+                        print(f"[WARNING] Response: {response.text}")
+                        print(f"[INFO] This may be normal if SSL modification is not supported via REST API")
+                        print(f"[INFO] You may need to use CLI: security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {first_serial} -server-enabled {str(server_enabled).lower()}")
+                
+                except Exception as ssl_error:
+                    print(f"\n[WARNING] Could not modify SSL configuration via API: {str(ssl_error)}")
+                    print(f"[INFO] Manual command to execute:")
+                    print(f"[INFO] security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {first_serial} -server-enabled {str(server_enabled).lower()}")
+            else:
+                print(f"\n[WARNING] Cannot execute SSL modify: missing ca_name or common_name")
+                print(f"[INFO] Add 'ssl' section to config.yaml with 'ca_name' parameter")
+        
+        return True
     
     # CONTROL DE ERRORES
     except NetAppRestError as error:
@@ -928,8 +1005,12 @@ def execute_option(option, config_data):
             print("[ERROR] Add 'name' field in 'svm' section")
             return True
         
-        # Obtener configuración de certificado (opcional)
-        cert_config = config_data.get('certificate', {})
+        # Combinar configuración de certificado y SSL
+        cert_config = {}
+        if 'certificate' in config_data:
+            cert_config.update(config_data['certificate'])
+        if 'ssl' in config_data:
+            cert_config['ssl'] = config_data['ssl']
         
         print("\n[*] Starting certificate modification workflow...")
         if modify_certificate(config_data['svm']['name'], cert_config):
