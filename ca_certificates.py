@@ -664,6 +664,42 @@ def modify_certificate(svm_name, cert_config=None):
                 if response.status_code in [200, 201, 202, 204]:
                     ssl_state = "true" if ssl_enabled else "false"
                     print(f"[+] SSL configuration update request sent!")
+                    
+                    # Si es 202, hay un job en background - consultarlo
+                    if response.status_code == 202 and response.text:
+                        try:
+                            job_data = response.json()
+                            if 'job' in job_data and 'uuid' in job_data['job']:
+                                job_uuid = job_data['job']['uuid']
+                                print(f"[*] Job UUID: {job_uuid}")
+                                print(f"[*] Checking job status...")
+                                
+                                # Consultar el estado del job
+                                import time
+                                time.sleep(2)  # Esperar 2 segundos
+                                
+                                job_url = f"https://{host}/api/cluster/jobs/{job_uuid}"
+                                job_response = requests.get(
+                                    job_url,
+                                    auth=(username, password),
+                                    verify=False
+                                )
+                                
+                                if job_response.status_code == 200:
+                                    job_info = job_response.json()
+                                    print(f"[DEBUG] Job state: {job_info.get('state', 'unknown')}")
+                                    print(f"[DEBUG] Job message: {job_info.get('message', 'N/A')}")
+                                    
+                                    if job_info.get('state') == 'failure':
+                                        print(f"[ERROR] Job failed!")
+                                        print(f"[ERROR] Job details: {json.dumps(job_info, indent=2)}")
+                                    elif job_info.get('state') == 'success':
+                                        print(f"[+] Job completed successfully!")
+                                    else:
+                                        print(f"[WARNING] Job state: {job_info.get('state')}")
+                        except Exception as job_err:
+                            print(f"[WARNING] Could not check job status: {str(job_err)}")
+                    
                     print(f"[+] Expected SSL Server Authentication Enabled: {ssl_state}")
                 else:
                     print(f"[WARNING] SSL modify returned status {response.status_code}")
