@@ -22,7 +22,7 @@ ssl:
 
 # CERTIFICATE SIGNING REQUEST (CSR) SETTINGS
 certificate:
-  common_name: certificate 
+  common_name: certificate2
   size: 2048  # Key size in bits (2048, 3072, 4096)
   algorithm: RSA
   hash_function: SHA256
