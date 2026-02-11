@@ -48,7 +48,7 @@ certificate:
   
   # CERTIFICATE INSTALLATION SETTINGS (for option [2])
   # Specify paths to certificate files (relative or absolute)
-  cert_name: rhoso  # Name for the certificate in ONTAP
+  cert_name: rhoso2  # Name for the certificate in ONTAP
   type: server  # Certificate type (server, client, client-ca, server-ca, root-ca)
   
   # Path to your certificate files
