@@ -1606,7 +1606,6 @@ def execute_option(option, config_data):
             print("[ERROR] Add 'name' field in the 'svm' section")
             return True
         
-        print("\n[*] Starting certificate installation workflow...")
         if install_certificate(config_data['certificate'], config_data['svm']['name']):
             print("\n[SUCCESS] Certificate installation process completed!")
             print("[+] The certificate is now installed on SVM: {}".format(config_data['svm']['name']))
