@@ -129,10 +129,6 @@ def save_to_log(operation_name, data):
     
     Returns:
         str: Ruta del archivo creado
-    
-    Ejemplo:
-        save_to_log('create_svm', svm_data)
-        # Crea: logs/create_svm_20260129_143025.json
     """
     try:
         # Crear carpeta logs si no existe
@@ -387,8 +383,6 @@ def csr_generate(cert_config):
             # Extraer el CSR y la clave privada de la respuesta
             response_data = response.http_response.json()
             
-            # DEBUG: Mostrar las claves disponibles en la respuesta
-            print(f"[DEBUG] Response keys: {list(response_data.keys())}")
             
             csr_data = {
                 'subject_name': subject_name,
@@ -403,7 +397,6 @@ def csr_generate(cert_config):
             for key in ['signing_request', 'certificate_signing_request', 'csr', 'request']:
                 if key in response_data:
                     csr_content = response_data[key]
-                    print(f"[DEBUG] Found CSR in field: {key}")
                     break
             
             # Buscar la clave privada en diferentes posibles nombres de campo
@@ -411,7 +404,6 @@ def csr_generate(cert_config):
             for key in ['generated_private_key', 'private_key', 'key', 'privateKey']:
                 if key in response_data:
                     private_key_content = response_data[key]
-                    print(f"[DEBUG] Found private key in field: {key}")
                     break
             
             # Mostrar y guardar el CSR
@@ -499,9 +491,6 @@ def get_serial_numbers(svm_name):
     """
     Obtiene y muestra los serial numbers de los certificados de una SVM
     
-    Ejecuta el equivalente a:
-        security certificate show -vserver <svm> -instance
-    
     Esta función:
     1. Consulta todos los certificados de la SVM especificada
     2. Extrae los serial numbers de cada certificado
@@ -513,9 +502,6 @@ def get_serial_numbers(svm_name):
     
     Returns:
         bool: True si se obtuvieron certificados exitosamente, False si hubo error
-    
-    Ejemplo de uso:
-        get_serial_numbers('svm_1_cluster')
     """
     try:
         print(f"\n[*] Starting serial numbers retrieval workflow...")
@@ -704,10 +690,7 @@ def get_serial_numbers(svm_name):
 def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name):
     """
     Modifica la configuración SSL de un certificado en NetApp ONTAP
-    
-    Ejecuta el equivalente a:
-        security ssl modify -vserver <svm> -ca <ca> -common-name <cn> -serial <serial> -server-enabled <true|false>
-    
+
     Esta función:
     1. Valida los parámetros de configuración SSL
     2. Ejecuta la modificación SSL mediante la API REST de NetApp
@@ -723,11 +706,6 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name):
     
     Returns:
         bool: True si se modificó exitosamente, False si hubo error
-    
-    Ejemplo de uso:
-        modify_ssl_certificate('svm_1_cluster', '1892EAF8B8E7D247', 
-                              {'ca_name': 'vdc-ca', 'server_enabled': True}, 
-                              'certificate')
     """
     try:
         print(f"\n[*] Starting SSL certificate modification workflow...")
@@ -906,10 +884,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name):
 def delete_certificate(svm_name, serial_number, cert_config):
     """
     Elimina un certificado de NetApp ONTAP
-    
-    Ejecuta el equivalente a:
-        security certificate delete -type server -vserver <svm> -ca <ca> -serial <serial> -common-name <cn>
-    
+        
     Esta función:
     1. Valida los parámetros de configuración
     2. Busca el certificado por serial number
@@ -926,11 +901,7 @@ def delete_certificate(svm_name, serial_number, cert_config):
     
     Returns:
         bool: True si se eliminó exitosamente, False si hubo error
-    
-    Ejemplo de uso:
-        delete_certificate('svm_1_cluster', '16519C887ED0E2BF91150BC750220DC3A8B720D6', 
-                          {'type': 'server', 'common_name': 'certificate', 'ca_name': 'vdc-ca'})
-    """
+  """
     try:
         print(f"\n[*] Starting certificate deletion workflow...")
         print(f"{'='*70}")
@@ -1238,10 +1209,7 @@ def install_certificate(cert_config, svm_name):
     El usuario debe proporcionar manualmente dos archivos:
     1. Certificado público (clave pública firmada por la CA)
     2. Clave privada (generada junto con el CSR)
-    
-    Equivalente CLI:
-        security certificate install -vserver <svm> -type server -cert-name <name>
-    
+     
     Proceso interactivo del comando CLI:
         1. Enter certificate: Press <Enter> when done
            → Se ingresa el certificado público
@@ -1260,9 +1228,6 @@ def install_certificate(cert_config, svm_name):
     
     Returns:
         bool: True si se instaló exitosamente, False si hubo error
-    
-    Ejemplo de uso:
-        install_certificate(config_data['certificate'], config_data['svm']['name'])
     """
     try:
         print(f"\n[*] Starting certificate installation workflow...")
