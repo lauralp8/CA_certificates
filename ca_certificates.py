@@ -1003,16 +1003,18 @@ def delete_certificate(svm_name, serial_number, cert_config):
     4. Verifica que el certificado fue eliminado
     
     El comando CLI utilizado es:
-    security certificate delete -type server -vserver <svm_name> -ca <ca_name> 
-                                -serial <serial_number> -common-name <common_name>
+    security certificate delete -type server -vserver <svm_name> -ca <svm_name> 
+                                -serial <serial_number> -common-name <svm_name>
+    
+    Criterio de selección: Certificado donde CA = nombre_vserver
     
     Args:
         svm_name (str): Nombre de la SVM donde eliminar el certificado
         serial_number (str): Serial number del certificado a eliminar
         cert_config (dict): Configuración del certificado:
             - type: Tipo de certificado (default: 'server')
-            - common_name: Common name del certificado (para autofirmado = svm_name)
-            - ca_name: Nombre de la CA (para autofirmado = svm_name)
+            - common_name: Common name (generalmente = svm_name)
+            - ca_name: Nombre de la CA (generalmente = svm_name)
     
     Returns:
         bool: True si se eliminó exitosamente, False si hubo error
@@ -1190,7 +1192,7 @@ def delete_certificate(svm_name, serial_number, cert_config):
             'common_name': common_name,
             'cli_command': cli_command,
             'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            'note': 'Certificate deleted using specific parameters: type=server, vserver=svm_name, ca=ca_name, serial=serial_number, common-name=common_name'
+            'note': 'Certificate deleted where CA = SVM name. Parameters: type=server, vserver=svm_name, ca=svm_name, serial=serial_number, common-name=svm_name'
         }
         
         save_to_log('certificate_delete', delete_log)
@@ -1691,7 +1693,7 @@ def display_menu():
     print("="*70)
     print("\n[1] Generate Certificate Signing Request (CSR)")
     print("[2] Install Signed Certificate")
-    print("[3] Delete Self-Signed Certificate")
+    print("[3] Delete Certificate (CA = SVM Name)")
     print("[4] Modify SSL Configuration")
     print("[0] Exit (with event logs backup)")
     print("[9] Exit without logs")
@@ -1749,7 +1751,7 @@ def execute_option(option, config_data):
         return True
     
     elif option == "3":
-        # DELETE SELF-SIGNED CERTIFICATE
+        # DELETE CERTIFICATE WHERE CA = SVM NAME
         if 'svm' not in config_data or 'name' not in config_data['svm']:
             print("\n[ERROR] No SVM name found in config.yaml")
             print("[ERROR] Add 'name' field in the 'svm' section")
@@ -1757,86 +1759,77 @@ def execute_option(option, config_data):
         
         svm_name = config_data['svm']['name']
         
-        print("\n[*] Starting self-signed certificate deletion workflow...")
+        print("\n[*] Starting certificate deletion workflow...")
         print(f"{'='*70}")
-        print(f"[*] Target: Delete certificate with self-signed=true AND common_name={svm_name}")
+        print(f"[*] Target: Delete certificate where CA = {svm_name}")
         print(f"{'='*70}")
         
         # Obtener todos los certificados de la SVM
         certificate_details = get_serial_numbers(svm_name)
         
         if certificate_details:
-            print("\n[*] Analyzing certificates to find self-signed certificate...")
+            print("\n[*] Analyzing certificates to find certificate with CA = SVM name...")
             
             cert_to_delete = None
             
-            # Buscar certificado con self-signed = true Y common_name = svm_name
+            # Buscar certificado donde CA = svm_name
             for cert in certificate_details:
-                is_self_signed = cert.get('self_signed', None)
-                cert_common_name = cert.get('common_name', '')
+                cert_ca = cert.get('ca', '')
                 
                 print(f"\n[*] Analyzing certificate:")
                 print(f"    - Name: {cert['certificate_name']}")
-                print(f"    - Common Name: {cert_common_name}")
-                print(f"    - Self-Signed: {is_self_signed}")
-                print(f"    - CA: {cert.get('ca', 'N/A')}")
+                print(f"    - Common Name: {cert.get('common_name', 'N/A')}")
+                print(f"    - CA: {cert_ca}")
                 print(f"    - Serial: {cert['serial_number']}")
                 
-                # Verificar ambas condiciones: self-signed = true Y common_name = svm_name
-                if is_self_signed is True and cert_common_name == svm_name:
+                # Verificar si CA = svm_name
+                if cert_ca == svm_name:
                     cert_to_delete = cert
-                    print(f"    -> ✓ MATCH: This is the self-signed certificate to delete!")
-                elif is_self_signed is True:
-                    print(f"    -> Self-signed but common_name doesn't match SVM name")
-                elif cert_common_name == svm_name:
-                    print(f"    -> Common name matches but not self-signed")
+                    print(f"    -> ✓ MATCH: CA matches SVM name, this certificate will be deleted!")
                 else:
-                    print(f"    -> Does not match deletion criteria")
+                    print(f"    -> CA doesn't match SVM name (skipped)")
             
             # Verificar que encontramos el certificado
             if not cert_to_delete:
-                print(f"\n[WARNING] Could not find self-signed certificate with common_name = '{svm_name}'")
+                print(f"\n[WARNING] Could not find certificate with CA = '{svm_name}'")
                 print("[INFO] This may indicate:")
                 print("       - The certificate was already deleted")
-                print("       - No self-signed certificate exists")
-                print("       - The certificate has a different common name")
+                print("       - No certificate exists with CA matching the SVM name")
                 return True
             
             # ============================================================
-            # ELIMINAR EL CERTIFICADO AUTOFIRMADO
+            # ELIMINAR EL CERTIFICADO
             # ============================================================
             
             delete_serial = cert_to_delete['serial_number']
-            delete_ca = cert_to_delete.get('ca', svm_name)  # CA del autofirmado = nombre SVM
-            delete_common_name = cert_to_delete.get('common_name', svm_name)  # Common name = nombre SVM
             
             print(f"\n[*] Proceeding with certificate deletion...")
-            print(f"[*] Certificate to delete (self-signed):")
+            print(f"[*] Certificate to delete:")
             print(f"    - Type: server")
             print(f"    - VServer: {svm_name}")
-            print(f"    - CA: {delete_ca}")
-            print(f"    - Common Name: {delete_common_name}")
+            print(f"    - CA: {svm_name}")
+            print(f"    - Common Name: {svm_name}")
             print(f"    - Serial Number: {delete_serial}")
             print(f"    - Certificate Name: {cert_to_delete['certificate_name']}")
-            print(f"    - Self-Signed: True")
             
             # Preparar configuración para delete_certificate
-            # Para certificado autofirmado: type=server, vserver=svm_name, ca=svm_name, common-name=svm_name
+            # Parámetros: type=server, vserver=svm_name, ca=svm_name, serial=serial, common-name=svm_name
             delete_config = {
                 'type': 'server',
-                'common_name': svm_name,  # Common name del autofirmado = nombre SVM
-                'ca_name': svm_name  # CA del autofirmado = nombre SVM
+                'common_name': svm_name,
+                'ca_name': svm_name
             }
             
             # Llamar a la función de eliminación de certificado
             if delete_certificate(svm_name, delete_serial, delete_config):
-                print("\n[SUCCESS] Self-signed certificate deletion completed!")
+                print("\n[SUCCESS] Certificate deletion completed!")
                 print(f"{'='*70}")
                 print("  CERTIFICATE DELETED SUCCESSFULLY")
                 print(f"{'='*70}")
                 print(f"\n[✓] Certificate deleted: {cert_to_delete['certificate_name']}")
                 print(f"[✓] Serial Number: {delete_serial}")
-                print(f"\n[INFO] The self-signed certificate has been removed from the system")
+                print(f"[✓] CA: {svm_name}")
+                print(f"\n[INFO] The certificate has been removed from the system")
             else:
                 print("\n[ERROR] Certificate deletion failed")
                 print("[ERROR] Check the error messages above for details")
