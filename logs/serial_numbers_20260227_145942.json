@@ -1,0 +1,21 @@
+{
+  "operation": "get_serial_numbers",
+  "svm_name": "SVMv2-ES00384-RHOSO_BTC_NAS01-NAS",
+  "total_certificates": 1,
+  "total_serial_numbers": 1,
+  "serial_numbers": [
+    "7BB05FC50001000001E2"
+  ],
+  "certificate_details": [
+    {
+      "certificate_name": "rhoso",
+      "common_name": "SVMv2-ES00384-RHOSO_BTC_NAS01-NAS",
+      "serial_number": "7BB05FC50001000001E2",
+      "type": "server",
+      "ca": "vdc-ca",
+      "expiry_time": "2028-02-24T17:32:32+01:00",
+      "uuid": "8d887735-13e4-11f1-a019-d039eaccfdc5"
+    }
+  ],
+  "timestamp": "2026-02-27 14:59:42"
+}

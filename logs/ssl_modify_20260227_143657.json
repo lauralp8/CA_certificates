@@ -1,0 +1,10 @@
+{
+  "operation": "ssl_modify",
+  "svm_name": "SVMv2-ES00384-RHOSO_BTC_NAS01-NAS",
+  "ca_name": "vdc-ca",
+  "common_name": "SVMv2-ES00384-RHOSO_BTC_NAS01-NAS",
+  "serial_number": "189723A159E02619",
+  "server_enabled": true,
+  "cli_command": "security ssl modify -vserver SVMv2-ES00384-RHOSO_BTC_NAS01-NAS -ca vdc-ca -common-name SVMv2-ES00384-RHOSO_BTC_NAS01-NAS -serial 189723A159E02619 -server-enabled true",
+  "timestamp": "2026-02-27 14:36:57"
+}

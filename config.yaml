@@ -7,9 +7,9 @@
 
 # CONFIGURACIÓN DE CONEXIÓN AL CLÚSTER
 cluster:
-  host: cluster1.demo.netapp.com            
+  host: 10.136.14.102        
   username: admin
-  password: "Netapp1!"
+  password: netapp00
 
 # CONFIGURACIÓN SVM
 svm:
@@ -17,7 +17,7 @@ svm:
 
 # CONFIGURACIÓN DE CERTIFICADOS (CSR)
 certificate:
-  common_name: certificate2
+  common_name: SVMv2-RHOSO_COR_NAS01-NAS.es-north-1.cc.vdc.adm
   size: 2048  # Tamaño en bits (2048, 3072, 4096)
   algorithm: RSA
   hash_function: SHA256
@@ -25,9 +25,9 @@ certificate:
     - serverAuth
     - clientAuth
   country: ES
-  state: CORUNA
-  locality: CORUNA
-  dns_name: certificate
+  state: BARCELONA
+  locality: BARCELONA 
+  dns_name: SVMv2-RHOSO_COR_NAS01-NAS.es-north-1.cc.vdc.adm
   
   # Campos opcionales:
   # organization: My Organization
@@ -42,7 +42,7 @@ certificate:
   #   - keyEncipherment
   
   # INSTALACIÓN DE CERTIFICADOS 
-  cert_name: rhoso2  
+  cert_name: rhoso 
   type: server  
 
   # Path to your certificate files

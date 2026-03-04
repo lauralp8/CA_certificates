@@ -1,0 +1,15 @@
+{
+  "operation": "security_ssl_show",
+  "svm_name": "SVMv2-ES00384-RHOSO_BTC_NAS01-NAS",
+  "total_ssl_certs": 1,
+  "ssl_certificates": [
+    {
+      "vserver": "SVMv2-ES00384-RHOSO_BTC_NAS01-NAS",
+      "certificate_name": "SVMv2-ES00384-RHOSO_BCN_NAS01-NAS_189723A159E02619",
+      "serial": "189723A159E02619",
+      "ca": "SVMv2-ES00384-RHOSO_BCN_NAS01-NAS",
+      "common_name": "SVMv2-ES00384-RHOSO_BCN_NAS01-NAS"
+    }
+  ],
+  "timestamp": "2026-02-27 14:37:00"
+}

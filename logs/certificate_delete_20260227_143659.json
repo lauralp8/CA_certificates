@@ -1,0 +1,10 @@
+{
+  "operation": "certificate_delete",
+  "svm_name": "SVMv2-ES00384-RHOSO_BTC_NAS01-NAS",
+  "serial_number": "7BB05FC50001000001E2",
+  "cert_type": "server",
+  "ca_name": "vdc-ca",
+  "common_name": "SVMv2-ES00384-RHOSO_BTC_NAS01-NAS",
+  "cli_command": "security certificate delete -type server -vserver SVMv2-ES00384-RHOSO_BTC_NAS01-NAS -ca vdc-ca -serial 7BB05FC50001000001E2 -common-name SVMv2-ES00384-RHOSO_BTC_NAS01-NAS",
+  "timestamp": "2026-02-27 14:36:59"
+}

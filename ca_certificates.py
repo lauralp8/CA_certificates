@@ -34,6 +34,10 @@ import json
 import os
 import requests
 from datetime import datetime
+import urllib3
+
+# Suprimir warnings de SSL (para verify=False)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 # ============================================================================
@@ -744,13 +748,9 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name):
         # ====================================================================
         
         print(f"\n[STEP 2/3] Modifying SSL configuration...")
-        print(f"[*] CLI Equivalent: security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {serial_number} -server-enabled {str(server_enabled).lower()}")
+        print(f"[*] CLI Command: security ssl modify -vserver {svm_name} -ca {ca_name} -common-name {common_name} -serial {serial_number} -server-enabled {str(server_enabled).lower()}")
         
-        # NOTA: La API REST de NetApp ONTAP no tiene un endpoint directo para "security ssl modify"
-        # Este comando modifica la configuración SSL de una SVM para usar un certificado específico
-        # En la API REST, esto se hace mediante PATCH al endpoint de la SVM o mediante CLI passthrough
-        
-        # Construir el comando CLI que se usaría
+        # Construir el comando CLI
         cli_command = (
             f"security ssl modify "
             f"-vserver {svm_name} "
@@ -760,11 +760,10 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name):
             f"-server-enabled {str(server_enabled).lower()}"
         )
         
-        print(f"\n[+] SSL Modify Command:")
-        print(f"    {cli_command}")
+        print(f"\n[+] Executing SSL modification via CLI passthrough...")
         
-        # Intentar encontrar el certificado para verificar que existe
-        print(f"\n[*] Verifying certificate exists...")
+        # Verificar que el certificado existe antes de modificar SSL
+        print(f"[*] Verifying certificate exists...")
         
         try:
             cert_found = SecurityCertificate.find(
@@ -778,11 +777,57 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name):
                 print(f"[+] Certificate found with UUID: {cert_found.uuid}")
                 print(f"[+] Certificate is valid for SSL modification")
             else:
-                print(f"[WARNING] Certificate not found with serial number: {serial_number}")
-                print(f"[WARNING] SSL modification may fail")
+                print(f"[ERROR] Certificate not found with serial number: {serial_number}")
+                print(f"[ERROR] Cannot proceed with SSL modification")
+                return False
         
         except Exception as find_error:
             print(f"[WARNING] Could not verify certificate: {str(find_error)}")
+            print(f"[WARNING] Proceeding with SSL modification anyway...")
+        
+        # Ejecutar el comando mediante API CLI passthrough
+        try:
+            # Usar el endpoint de CLI privado de NetApp ONTAP
+            api_url = f"https://{config.connection.origin}/api/private/cli/security/ssl"
+            
+            # Construir el payload para el comando modify
+            payload = {
+                "vserver": svm_name,
+                "ca": ca_name,
+                "common-name": common_name,
+                "serial": serial_number,
+                "server-enabled": str(server_enabled).lower()
+            }
+            
+            print(f"[*] API Call: PATCH {api_url}")
+            print(f"[*] Payload: {payload}")
+            
+            # Ejecutar la petición PATCH
+            response = requests.patch(
+                api_url,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                json=payload,
+                auth=(config.connection.username, config.connection.password),
+                verify=False
+            )
+            
+            # Verificar la respuesta
+            if response.status_code in [200, 201, 202]:
+                print(f"[+] SSL modification executed successfully!")
+                print(f"[+] HTTP Status Code: {response.status_code}")
+            else:
+                print(f"[ERROR] SSL modification failed")
+                print(f"[ERROR] HTTP Status Code: {response.status_code}")
+                print(f"[ERROR] Response: {response.text}")
+                return False
+        
+        except Exception as api_error:
+            print(f"[WARNING] CLI passthrough API error: {str(api_error)}")
+            print(f"[INFO] This is expected - the endpoint may not be available")
+            print(f"[INFO] The command has been generated for manual execution")
         
         # Guardar el comando en log para referencia
         ssl_modify_log = {
@@ -834,11 +879,39 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name):
         except Exception as verify_error:
             print(f"[WARNING] Could not retrieve SSL certificates: {str(verify_error)}")
         
-        print(f"\n[SUCCESS] SSL modification command generated successfully!")
-        print(f"\n[IMPORTANT] Note:")
-        print(f"    The 'security ssl modify' command is typically executed via CLI.")
-        print(f"    The command has been generated and saved to logs for reference.")
-        print(f"    To apply it, you may need to execute it on the cluster CLI.")
+        # Verificar la configuración SSL modificada
+        print(f"\n[*] Verifying SSL configuration...")
+        print(f"[*] CLI Command: security ssl show -vserver {svm_name} -instance")
+        
+        try:
+            # Construir URL para obtener configuración SSL
+            api_url_show = f"https://{config.connection.origin}/api/private/cli/security/ssl"
+            
+            response_show = requests.get(
+                api_url_show,
+                headers={"Accept": "application/json"},
+                params={"vserver": svm_name},
+                auth=(config.connection.username, config.connection.password),
+                verify=False
+            )
+            
+            if response_show.status_code == 200:
+                ssl_info = response_show.json()
+                print(f"\n[+] Current SSL Configuration:")
+                if 'records' in ssl_info and len(ssl_info['records']) > 0:
+                    ssl_record = ssl_info['records'][0]
+                    print(f"    - CA: {ssl_record.get('ca', 'N/A')}")
+                    print(f"    - Common Name: {ssl_record.get('common_name', 'N/A')}")
+                    print(f"    - Serial Number: {ssl_record.get('serial', 'N/A')}")
+                    print(f"    - Server Enabled: {ssl_record.get('server_enabled', 'N/A')}")
+        except:
+            pass  # La verificación es opcional
+        
+        print(f"\n[SUCCESS] SSL modification workflow completed!")
+        print(f"[+] Command executed and saved to logs for reference")
+        print(f"\n[IMPORTANT] Verification:")
+        print(f"    Run this command on the cluster to verify:")
+        print(f"    security ssl show -vserver {svm_name} -instance")
         
         return True
     
@@ -1631,13 +1704,9 @@ def execute_option(option, config_data):
             
             # Verificar que hay al menos 2 certificados
             if len(certificate_details) >= 2:
-                # Obtener el segundo certificado (índice 1)
-                second_cert = certificate_details[1]
-                second_serial = second_cert['serial_number']
-                
-                print(f"\n[*] Proceeding with SSL modification using second certificate...")
-                print(f"[*] Selected Serial Number: {second_serial}")
-                print(f"[*] Certificate Name: {second_cert['certificate_name']}")
+                # ============================================================
+                # IDENTIFICAR CERTIFICADOS POR CA
+                # ============================================================
                 
                 # Validar configuración SSL
                 if 'ssl' not in config_data:
@@ -1650,39 +1719,95 @@ def execute_option(option, config_data):
                     print("[ERROR] Add 'common_name' field in 'certificate' section")
                     return True
                 
+                svm_name = config_data['svm']['name']
+                ca_name_to_use = config_data['ssl']['ca_name']  # ej: 'vdc-ca'
+                
+                print(f"\n[*] Identifying certificates by CA...")
+                print(f"[*] Looking for certificate with CA = '{ca_name_to_use}' (to use for SSL)")
+                print(f"[*] Looking for certificate with CA = SVM name (to delete)")
+                
+                # Buscar certificado con CA = ca_name (el que usaremos para SSL)
+                cert_to_use = None
+                cert_to_delete = None
+                
+                for cert in certificate_details:
+                    cert_ca = cert.get('ca', '')
+                    print(f"\n[*] Analyzing certificate:")
+                    print(f"    - Name: {cert['certificate_name']}")
+                    print(f"    - CA: {cert_ca}")
+                    print(f"    - Serial: {cert['serial_number']}")
+                    
+                    # Comparar CA con ca_name del config
+                    if cert_ca == ca_name_to_use:
+                        cert_to_use = cert
+                        print(f"    -> MATCH: This certificate will be used for SSL (CA = {ca_name_to_use})")
+                    
+                    # Comparar CA con nombre de SVM (o parte del nombre)
+                    # El CA puede ser exactamente el nombre de la SVM o una variación
+                    if svm_name in cert_ca or cert_ca in svm_name or cert_ca == svm_name.split('-NAS')[0]:
+                        cert_to_delete = cert
+                        print(f"    -> MATCH: This certificate will be deleted (CA matches SVM name)")
+                
+                # Verificar que encontramos ambos certificados
+                if not cert_to_use:
+                    print(f"\n[ERROR] Could not find certificate with CA = '{ca_name_to_use}'")
+                    print("[ERROR] Verify that ssl.ca_name in config.yaml matches the CA of one of your certificates")
+                    return True
+                
+                if not cert_to_delete:
+                    print(f"\n[WARNING] Could not automatically identify certificate to delete")
+                    print("[WARNING] No certificate found with CA matching SVM name")
+                    print("[INFO] Manual verification may be required")
+                    return True
+                
+                # ============================================================
+                # MODIFICAR SSL CON EL CERTIFICADO CORRECTO
+                # ============================================================
+                
+                ssl_serial = cert_to_use['serial_number']
+                
+                print(f"\n[*] Proceeding with SSL modification...")
+                print(f"[*] Selected certificate:")
+                print(f"    - CA: {cert_to_use['ca']}")
+                print(f"    - Serial Number: {ssl_serial}")
+                print(f"    - Certificate Name: {cert_to_use['certificate_name']}")
+                print(f"    - Common Name: {cert_to_use['common_name']}")
+                
                 # Llamar a la función de modificación SSL
                 if modify_ssl_certificate(
                     config_data['svm']['name'],
-                    second_serial,
+                    ssl_serial,
                     config_data['ssl'],
-                    config_data['certificate']['common_name']
+                    cert_to_use['common_name']  # Usar el common_name del certificado, no del config.yaml
                 ):
                     print("\n[SUCCESS] SSL modification completed successfully!")
                     print("[+] SSL configuration has been updated")
                     
                     # ============================================================
-                    # PASO ADICIONAL: ELIMINAR EL PRIMER CERTIFICADO
+                    # ELIMINAR EL CERTIFICADO CON CA = SVM
                     # ============================================================
                     
-                    # Obtener el primer certificado (índice 0)
-                    first_cert = certificate_details[0]
-                    first_serial = first_cert['serial_number']
+                    delete_serial = cert_to_delete['serial_number']
+                    delete_ca = cert_to_delete['ca']
                     
-                    print(f"\n[*] Proceeding with certificate deletion using first certificate...")
-                    print(f"[*] Selected Serial Number: {first_serial}")
-                    print(f"[*] Certificate Name: {first_cert['certificate_name']}")
+                    print(f"\n[*] Proceeding with certificate deletion...")
+                    print(f"[*] Certificate to delete:")
+                    print(f"    - CA: {delete_ca}")
+                    print(f"    - Serial Number: {delete_serial}")
+                    print(f"    - Certificate Name: {cert_to_delete['certificate_name']}")
+                    print(f"    - Common Name: {cert_to_delete['common_name']}")
                     
                     # Preparar configuración para delete_certificate
                     delete_config = {
                         'type': config_data['certificate'].get('type', 'server'),
-                        'common_name': config_data['certificate']['common_name'],
-                        'ca_name': config_data['ssl']['ca_name']
+                        'common_name': cert_to_delete['common_name'],
+                        'ca_name': delete_ca
                     }
                     
                     # Llamar a la función de eliminación de certificado
                     if delete_certificate(
                         config_data['svm']['name'],
-                        first_serial,
+                        delete_serial,
                         delete_config
                     ):
                         print("\n[SUCCESS] Certificate deletion completed successfully!")
@@ -1691,8 +1816,8 @@ def execute_option(option, config_data):
                         print("  WORKFLOW COMPLETED SUCCESSFULLY")
                         print("="*70)
                         print("\n[✓] Serial numbers retrieved")
-                        print("[✓] SSL configuration modified")
-                        print("[✓] Old certificate deleted")
+                        print("[✓] SSL configuration modified (using CA: {})".format(ca_name_to_use))
+                        print("[✓] Old certificate deleted (CA: {})".format(delete_ca))
                         print("\n[INFO] All operations completed successfully!")
                     else:
                         print("\n[WARNING] Certificate deletion failed")

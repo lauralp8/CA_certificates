@@ -1,0 +1,8 @@
+{
+  "operation": "certificate_install",
+  "svm_name": "SVMv2-ES00384-RHOSO_BTC_NAS01-NAS",
+  "cert_name": "rhoso",
+  "cert_type": "server",
+  "timestamp": "2026-02-27 14:59:37",
+  "status": "success"
+}
