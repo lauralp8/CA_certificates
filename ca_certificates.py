@@ -994,7 +994,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
 
 def delete_certificate(svm_name, serial_number, cert_config):
     """
-    Elimina un certificado de NetApp ONTAP
+    Elimina un certificado de NetApp ONTAP usando el comando CLI específico
         
     Esta función:
     1. Valida los parámetros de configuración
@@ -1002,13 +1002,17 @@ def delete_certificate(svm_name, serial_number, cert_config):
     3. Elimina el certificado usando la API REST de NetApp
     4. Verifica que el certificado fue eliminado
     
+    El comando CLI utilizado es:
+    security certificate delete -type server -vserver <svm_name> -ca <ca_name> 
+                                -serial <serial_number> -common-name <common_name>
+    
     Args:
         svm_name (str): Nombre de la SVM donde eliminar el certificado
         serial_number (str): Serial number del certificado a eliminar
-        cert_config (dict): Configuración desde config.yaml:
-            - type: Tipo de certificado (server, client, etc.)
-            - common_name: Common name del certificado
-            - ca_name: Nombre de la CA (desde ssl.ca_name)
+        cert_config (dict): Configuración del certificado:
+            - type: Tipo de certificado (default: 'server')
+            - common_name: Common name del certificado (para autofirmado = svm_name)
+            - ca_name: Nombre de la CA (para autofirmado = svm_name)
     
     Returns:
         bool: True si se eliminó exitosamente, False si hubo error
@@ -1023,17 +1027,31 @@ def delete_certificate(svm_name, serial_number, cert_config):
         
         print(f"\n[STEP 1/4] Validating configuration parameters...")
         
-        # Extraer parámetros (usar valores por defecto si no existen)
+        # Extraer parámetros
         cert_type = cert_config.get('type', 'server')
-        common_name = cert_config.get('common_name', 'N/A')
-        ca_name = cert_config.get('ca_name', 'N/A')
+        common_name = cert_config.get('common_name')
+        ca_name = cert_config.get('ca_name')
         
-        print(f"[+] Configuration:")
-        print(f"    - SVM Name: {svm_name}")
-        print(f"    - Certificate Type: {cert_type}")
+        # Validar parámetros requeridos
+        if not common_name:
+            print(f"[ERROR] Missing 'common_name' in certificate configuration")
+            return False
+        
+        if not ca_name:
+            print(f"[ERROR] Missing 'ca_name' in certificate configuration")
+            return False
+        
+        print(f"[+] Deletion parameters validated:")
+        print(f"    - Type: {cert_type}")
+        print(f"    - VServer: {svm_name}")
         print(f"    - CA Name: {ca_name}")
         print(f"    - Common Name: {common_name}")
         print(f"    - Serial Number: {serial_number}")
+        
+        print(f"\n[*] Command to execute:")
+        print(f"    security certificate delete -type {cert_type} -vserver {svm_name} \\")
+        print(f"                                -ca {ca_name} -serial {serial_number} \\")
+        print(f"                                -common-name {common_name}")
         
         # ====================================================================
         # PASO 2: BUSCAR EL CERTIFICADO
@@ -1161,6 +1179,8 @@ def delete_certificate(svm_name, serial_number, cert_config):
             print(f"[WARNING] Could not retrieve remaining certificates: {str(list_error)}")
         
         # Guardar en log
+        print(f"\n[*] Saving deletion details to log...")
+        
         delete_log = {
             'operation': 'certificate_delete',
             'svm_name': svm_name,
@@ -1169,7 +1189,8 @@ def delete_certificate(svm_name, serial_number, cert_config):
             'ca_name': ca_name,
             'common_name': common_name,
             'cli_command': cli_command,
-            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'note': 'Certificate deleted using specific parameters: type=server, vserver=svm_name, ca=ca_name, serial=serial_number, common-name=common_name'
         }
         
         save_to_log('certificate_delete', delete_log)
@@ -1786,21 +1807,25 @@ def execute_option(option, config_data):
             # ============================================================
             
             delete_serial = cert_to_delete['serial_number']
-            delete_ca = cert_to_delete['ca']
+            delete_ca = cert_to_delete.get('ca', svm_name)  # CA del autofirmado = nombre SVM
+            delete_common_name = cert_to_delete.get('common_name', svm_name)  # Common name = nombre SVM
             
             print(f"\n[*] Proceeding with certificate deletion...")
-            print(f"[*] Certificate to delete:")
+            print(f"[*] Certificate to delete (self-signed):")
+            print(f"    - Type: server")
+            print(f"    - VServer: {svm_name}")
             print(f"    - CA: {delete_ca}")
-            print(f"    - Common Name: {cert_to_delete['common_name']}")
+            print(f"    - Common Name: {delete_common_name}")
             print(f"    - Serial Number: {delete_serial}")
             print(f"    - Certificate Name: {cert_to_delete['certificate_name']}")
             print(f"    - Self-Signed: True")
             
             # Preparar configuración para delete_certificate
+            # Para certificado autofirmado: type=server, vserver=svm_name, ca=svm_name, common-name=svm_name
             delete_config = {
-                'type': cert_to_delete.get('type', 'server'),
-                'common_name': cert_to_delete['common_name'],
-                'ca_name': delete_ca
+                'type': 'server',
+                'common_name': svm_name,  # Common name del autofirmado = nombre SVM
+                'ca_name': svm_name  # CA del autofirmado = nombre SVM
             }
             
             # Llamar a la función de eliminación de certificado
