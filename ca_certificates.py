@@ -839,7 +839,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
                 print(f"[DEBUG] SVM found: {svm.uuid}")
                 
                 # Intentar PATCH en el endpoint SSL
-                api_url_ssl = f"https://{config.connection.origin}/api/security/ssl/{svm.uuid}"
+                api_url_ssl = f"https://{config.CONNECTION._host}/api/security/ssl/{svm.uuid}"
                 
                 # Probar diferentes formatos de payload
                 payloads_to_try = [
@@ -874,7 +874,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
                             "Accept": "application/json"
                         },
                         json=payload,
-                        auth=(config.connection.username, config.connection.password),
+                        auth=(config.CONNECTION.username, config.CONNECTION.password),
                         verify=False,
                         timeout=10
                     )
@@ -899,7 +899,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
             
             try:
                 # Intentar usar el endpoint de CLI privado de NetApp ONTAP
-                api_url = f"https://{config.connection.origin}/api/private/cli/security/ssl"
+                api_url = f"https://{config.CONNECTION._host}/api/private/cli/security/ssl"
                 
                 # Probar diferentes formatos de payload
                 payloads_to_try = [
@@ -948,7 +948,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
                             "Accept": "application/json"
                         },
                         json=payload,
-                        auth=(config.connection.username, config.connection.password),
+                        auth=(config.CONNECTION.username, config.CONNECTION.password),
                         verify=False,
                         timeout=10
                     )
@@ -1059,24 +1059,10 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
             svm = Svm.find(name=svm_name)
             
             if svm:
-                svm.get()
                 print(f"[DEBUG] SVM found with UUID: {svm.uuid}")
                 
-                # Obtener todos los atributos disponibles del objeto SVM
-                print(f"\n[DEBUG] Available SVM attributes:")
-                for attr in dir(svm):
-                    if not attr.startswith('_') and not callable(getattr(svm, attr)):
-                        value = getattr(svm, attr, 'N/A')
-                        print(f"    - {attr}: {value}")
-                
-                # Verificar si hay atributos relacionados con SSL
-                if hasattr(svm, 'certificate'):
-                    print(f"\n[DEBUG] SVM has certificate attribute:")
-                    cert_info = svm.certificate
-                    print(f"    Certificate info: {cert_info}")
-                
                 # Intentar obtener la configuración SSL directamente
-                api_url_ssl = f"https://{config.connection.origin}/api/security/ssl"
+                api_url_ssl = f"https://{config.CONNECTION._host}/api/security/ssl"
                 
                 print(f"\n[DEBUG] Calling SSL API: GET {api_url_ssl}")
                 
@@ -1084,7 +1070,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
                     api_url_ssl,
                     headers={"Accept": "application/json"},
                     params={"svm.name": svm_name, "fields": "*"},
-                    auth=(config.connection.username, config.connection.password),
+                    auth=(config.CONNECTION.username, config.CONNECTION.password),
                     verify=False,
                     timeout=10
                 )
@@ -1096,12 +1082,14 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
                     print(f"\n[DEBUG] SSL API Response (full):")
                     print(json.dumps(ssl_data, indent=2))
                     
-                    if 'records' in ssl_data:
+                    if 'records' in ssl_data and len(ssl_data['records']) > 0:
                         print(f"\n[+] SSL Configuration found:")
                         for record in ssl_data['records']:
-                            print(f"\n    Record:")
+                            print(f"\n    SSL Record - All available fields:")
                             for key, value in record.items():
                                 print(f"      - {key}: {value}")
+                    else:
+                        print(f"[DEBUG] No SSL records found in response")
                 else:
                     print(f"[DEBUG] SSL API returned: {response_ssl.text}")
                     
@@ -1113,7 +1101,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
         # Intentar con el endpoint CLI privado
         try:
             # Construir URL para obtener configuración SSL
-            api_url_show = f"https://{config.connection.origin}/api/private/cli/security/ssl"
+            api_url_show = f"https://{config.CONNECTION._host}/api/private/cli/security/ssl"
             
             print(f"\n[DEBUG] Attempting CLI API: GET {api_url_show}")
             
@@ -1121,7 +1109,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
                 api_url_show,
                 headers={"Accept": "application/json"},
                 params={"vserver": svm_name, "fields": "*"},
-                auth=(config.connection.username, config.connection.password),
+                auth=(config.CONNECTION.username, config.CONNECTION.password),
                 verify=False,
                 timeout=10
             )
