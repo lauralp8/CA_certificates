@@ -51,7 +51,6 @@ certificate:
 
 # CONFIGURACIÓN DE SSL
 ssl:
-  ca_name: vdc-ca  # CA name for the certificate
   server_enabled: true  # Enable or disable SSL server (true/false)
 
 
