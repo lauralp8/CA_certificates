@@ -7,9 +7,9 @@
 
 # CONFIGURACIÓN DE CONEXIÓN AL CLÚSTER
 cluster:
-  host: 10.136.14.102        
+  host: cluster1.demo.netapp.com         
   username: admin
-  password: netapp00
+  password: Netapp1!
 
 # CONFIGURACIÓN SVM
 svm:
