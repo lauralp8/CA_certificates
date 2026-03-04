@@ -822,58 +822,162 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
         print(f"[WARNING] SSL modification via API is not supported in all ONTAP versions")
         print(f"[INFO] The command will be saved for manual execution or automated via CLI")
         
-        try:
-            # Intentar usar el endpoint de CLI privado de NetApp ONTAP (puede no funcionar)
-            api_url = f"https://{config.connection.origin}/api/private/cli/security/ssl"
-            
-            # Construir el payload para el comando modify
-            payload = {
-                "vserver": svm_name,
-                "ca": ca_name,
-                "common-name": common_name,
-                "serial": serial_number,
-                "server-enabled": str(server_enabled).lower()
-            }
-            
-            print(f"\n[*] Attempting API Call: PATCH {api_url}")
-            print(f"[*] Payload: {payload}")
-            
-            # Ejecutar la petición PATCH
-            response = requests.patch(
-                api_url,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                },
-                json=payload,
-                auth=(config.connection.username, config.connection.password),
-                verify=False,
-                timeout=10
-            )
-            
-            # Verificar la respuesta
-            if response.status_code in [200, 201, 202]:
-                print(f"[+] SSL modification executed successfully via API!")
-                print(f"[+] HTTP Status Code: {response.status_code}")
-                api_success = True
-            elif response.status_code == 404:
-                print(f"[WARNING] API endpoint not available (404)")
-                print(f"[INFO] CLI command will be provided for manual execution")
-                api_success = False
-            else:
-                print(f"[WARNING] API returned non-success status: {response.status_code}")
-                print(f"[INFO] Response: {response.text}")
-                print(f"[INFO] CLI command will be provided for manual execution")
-                api_success = False
+        api_success = False
         
-        except requests.exceptions.Timeout:
-            print(f"[WARNING] API request timed out")
-            print(f"[INFO] CLI command will be provided for manual execution")
-            api_success = False
-        except Exception as api_error:
-            print(f"[WARNING] API call failed: {str(api_error)}")
-            print(f"[INFO] CLI command will be provided for manual execution")
-            api_success = False
+        # ====================================================================
+        # INTENTO 1: Usar API REST oficial /api/security/ssl (PATCH)
+        # ====================================================================
+        
+        print(f"\n[DEBUG] Attempting Method 1: REST API /api/security/ssl")
+        
+        try:
+            from netapp_ontap.resources import Svm
+            
+            # Buscar la SVM
+            svm = Svm.find(name=svm_name)
+            if svm:
+                print(f"[DEBUG] SVM found: {svm.uuid}")
+                
+                # Intentar PATCH en el endpoint SSL
+                api_url_ssl = f"https://{config.connection.origin}/api/security/ssl/{svm.uuid}"
+                
+                # Probar diferentes formatos de payload
+                payloads_to_try = [
+                    {
+                        "certificate": {
+                            "name": cert_found.name if 'cert_found' in locals() else None
+                        },
+                        "enabled": server_enabled
+                    },
+                    {
+                        "certificate": {
+                            "uuid": cert_found.uuid if 'cert_found' in locals() else None
+                        },
+                        "enabled": server_enabled
+                    },
+                    {
+                        "server_enabled": server_enabled,
+                        "certificate": {
+                            "name": cert_found.name if 'cert_found' in locals() else None
+                        }
+                    }
+                ]
+                
+                for i, payload in enumerate(payloads_to_try):
+                    print(f"\n[DEBUG] Trying payload format {i+1}:")
+                    print(f"[DEBUG] Payload: {json.dumps(payload, indent=2)}")
+                    
+                    response = requests.patch(
+                        api_url_ssl,
+                        headers={
+                            "Content-Type": "application/json",
+                            "Accept": "application/json"
+                        },
+                        json=payload,
+                        auth=(config.connection.username, config.connection.password),
+                        verify=False,
+                        timeout=10
+                    )
+                    
+                    print(f"[DEBUG] Response Status: {response.status_code}")
+                    print(f"[DEBUG] Response Body: {response.text}")
+                    
+                    if response.status_code in [200, 201, 202]:
+                        print(f"[+] SUCCESS with payload format {i+1}!")
+                        api_success = True
+                        break
+                        
+        except Exception as rest_error:
+            print(f"[DEBUG] REST API method failed: {str(rest_error)}")
+        
+        # ====================================================================
+        # INTENTO 2: Usar API CLI privado /api/private/cli/security/ssl (PATCH)
+        # ====================================================================
+        
+        if not api_success:
+            print(f"\n[DEBUG] Attempting Method 2: CLI API /api/private/cli/security/ssl")
+            
+            try:
+                # Intentar usar el endpoint de CLI privado de NetApp ONTAP
+                api_url = f"https://{config.connection.origin}/api/private/cli/security/ssl"
+                
+                # Probar diferentes formatos de payload
+                payloads_to_try = [
+                    # Formato 1: Todos los parámetros como strings
+                    {
+                        "vserver": svm_name,
+                        "ca": ca_name,
+                        "common-name": common_name,
+                        "serial": serial_number,
+                        "server-enabled": str(server_enabled).lower()
+                    },
+                    # Formato 2: server-enabled como boolean
+                    {
+                        "vserver": svm_name,
+                        "ca": ca_name,
+                        "common-name": common_name,
+                        "serial": serial_number,
+                        "server-enabled": server_enabled
+                    },
+                    # Formato 3: con guiones bajos
+                    {
+                        "vserver": svm_name,
+                        "ca": ca_name,
+                        "common_name": common_name,
+                        "serial": serial_number,
+                        "server_enabled": server_enabled
+                    },
+                    # Formato 4: sin serial, solo con certificate name
+                    {
+                        "vserver": svm_name,
+                        "certificate": cert_found.name if 'cert_found' in locals() else ca_name,
+                        "server-enabled": server_enabled
+                    }
+                ]
+                
+                for i, payload in enumerate(payloads_to_try):
+                    print(f"\n[DEBUG] Trying CLI payload format {i+1}:")
+                    print(f"[DEBUG] URL: PATCH {api_url}")
+                    print(f"[DEBUG] Payload: {json.dumps(payload, indent=2)}")
+                    
+                    # Ejecutar la petición PATCH
+                    response = requests.patch(
+                        api_url,
+                        headers={
+                            "Content-Type": "application/json",
+                            "Accept": "application/json"
+                        },
+                        json=payload,
+                        auth=(config.connection.username, config.connection.password),
+                        verify=False,
+                        timeout=10
+                    )
+                    
+                    # Verificar la respuesta
+                    print(f"[DEBUG] Response Status: {response.status_code}")
+                    print(f"[DEBUG] Response Headers: {dict(response.headers)}")
+                    print(f"[DEBUG] Response Body: {response.text}")
+                    
+                    if response.status_code in [200, 201, 202]:
+                        print(f"[+] SSL modification executed successfully via CLI API (format {i+1})!")
+                        api_success = True
+                        break
+                    elif response.status_code == 404:
+                        print(f"[DEBUG] API endpoint not available (404)")
+                    else:
+                        print(f"[DEBUG] API returned non-success status")
+                        try:
+                            error_data = response.json()
+                            print(f"[DEBUG] Error details: {json.dumps(error_data, indent=2)}")
+                        except:
+                            pass
+                
+            except requests.exceptions.Timeout:
+                print(f"[DEBUG] API request timed out")
+            except Exception as api_error:
+                print(f"[DEBUG] CLI API call failed: {str(api_error)}")
+                import traceback
+                print(f"[DEBUG] Traceback: {traceback.format_exc()}")
         
         # Siempre proporcionar el comando CLI para ejecución manual
         print(f"\n{'='*70}")
@@ -941,29 +1045,116 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
         print(f"\n[*] Verifying SSL configuration...")
         print(f"[*] CLI Command: security ssl show -vserver {svm_name} -instance")
         
+        # ====================================================================
+        # DEBUG: OBTENER CONFIGURACIÓN SSL ACTUAL VÍA API REST
+        # ====================================================================
+        
+        print(f"\n[DEBUG] Attempting to retrieve SSL configuration via REST API...")
+        
+        try:
+            # Usar el endpoint REST API oficial para SVM
+            from netapp_ontap.resources import Svm
+            
+            print(f"[DEBUG] Searching for SVM: {svm_name}")
+            svm = Svm.find(name=svm_name)
+            
+            if svm:
+                svm.get()
+                print(f"[DEBUG] SVM found with UUID: {svm.uuid}")
+                
+                # Obtener todos los atributos disponibles del objeto SVM
+                print(f"\n[DEBUG] Available SVM attributes:")
+                for attr in dir(svm):
+                    if not attr.startswith('_') and not callable(getattr(svm, attr)):
+                        value = getattr(svm, attr, 'N/A')
+                        print(f"    - {attr}: {value}")
+                
+                # Verificar si hay atributos relacionados con SSL
+                if hasattr(svm, 'certificate'):
+                    print(f"\n[DEBUG] SVM has certificate attribute:")
+                    cert_info = svm.certificate
+                    print(f"    Certificate info: {cert_info}")
+                
+                # Intentar obtener la configuración SSL directamente
+                api_url_ssl = f"https://{config.connection.origin}/api/security/ssl"
+                
+                print(f"\n[DEBUG] Calling SSL API: GET {api_url_ssl}")
+                
+                response_ssl = requests.get(
+                    api_url_ssl,
+                    headers={"Accept": "application/json"},
+                    params={"svm.name": svm_name, "fields": "*"},
+                    auth=(config.connection.username, config.connection.password),
+                    verify=False,
+                    timeout=10
+                )
+                
+                print(f"[DEBUG] SSL API Response Status: {response_ssl.status_code}")
+                
+                if response_ssl.status_code == 200:
+                    ssl_data = response_ssl.json()
+                    print(f"\n[DEBUG] SSL API Response (full):")
+                    print(json.dumps(ssl_data, indent=2))
+                    
+                    if 'records' in ssl_data:
+                        print(f"\n[+] SSL Configuration found:")
+                        for record in ssl_data['records']:
+                            print(f"\n    Record:")
+                            for key, value in record.items():
+                                print(f"      - {key}: {value}")
+                else:
+                    print(f"[DEBUG] SSL API returned: {response_ssl.text}")
+                    
+        except Exception as debug_error:
+            print(f"[DEBUG] Error during SSL debugging: {str(debug_error)}")
+            import traceback
+            print(f"[DEBUG] Traceback: {traceback.format_exc()}")
+        
+        # Intentar con el endpoint CLI privado
         try:
             # Construir URL para obtener configuración SSL
             api_url_show = f"https://{config.connection.origin}/api/private/cli/security/ssl"
             
+            print(f"\n[DEBUG] Attempting CLI API: GET {api_url_show}")
+            
             response_show = requests.get(
                 api_url_show,
                 headers={"Accept": "application/json"},
-                params={"vserver": svm_name},
+                params={"vserver": svm_name, "fields": "*"},
                 auth=(config.connection.username, config.connection.password),
-                verify=False
+                verify=False,
+                timeout=10
             )
+            
+            print(f"[DEBUG] CLI API Response Status: {response_show.status_code}")
             
             if response_show.status_code == 200:
                 ssl_info = response_show.json()
-                print(f"\n[+] Current SSL Configuration:")
+                print(f"\n[DEBUG] CLI API Response (full):")
+                print(json.dumps(ssl_info, indent=2))
+                
+                print(f"\n[+] Current SSL Configuration (from CLI API):")
                 if 'records' in ssl_info and len(ssl_info['records']) > 0:
                     ssl_record = ssl_info['records'][0]
-                    print(f"    - CA: {ssl_record.get('ca', 'N/A')}")
-                    print(f"    - Common Name: {ssl_record.get('common_name', 'N/A')}")
-                    print(f"    - Serial Number: {ssl_record.get('serial', 'N/A')}")
-                    print(f"    - Server Enabled: {ssl_record.get('server_enabled', 'N/A')}")
-        except:
-            pass  # La verificación es opcional
+                    print(f"\n    All fields in SSL record:")
+                    for key, value in ssl_record.items():
+                        print(f"      - {key}: {value}")
+                    
+                    # Mostrar campos específicos
+                    print(f"\n    Key SSL fields:")
+                    print(f"      - CA: {ssl_record.get('ca', 'N/A')}")
+                    print(f"      - Common Name: {ssl_record.get('common_name', 'N/A')}")
+                    print(f"      - Serial Number: {ssl_record.get('serial', 'N/A')}")
+                    print(f"      - Server Enabled: {ssl_record.get('server_enabled', 'N/A')}")
+                    print(f"      - Server Authentication Enabled: {ssl_record.get('server_authentication_enabled', 'N/A')}")
+                    print(f"      - Client Enabled: {ssl_record.get('client_enabled', 'N/A')}")
+                    print(f"      - Client Authentication Enabled: {ssl_record.get('client_authentication_enabled', 'N/A')}")
+            else:
+                print(f"[DEBUG] CLI API returned: {response_show.text}")
+        except Exception as cli_error:
+            print(f"[DEBUG] CLI API error: {str(cli_error)}")
+            import traceback
+            print(f"[DEBUG] Traceback: {traceback.format_exc()}")
         
         print(f"\n[SUCCESS] SSL modification workflow completed!")
         print(f"[+] Command executed and saved to logs for reference")
