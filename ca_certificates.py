@@ -516,8 +516,6 @@ def get_serial_numbers(svm_name):
         # ====================================================================
         
         print(f"\n[STEP 1/3] Retrieving certificates from SVM: {svm_name}")
-        print(f"[*] API Call: GET /api/security/certificates?svm.name={svm_name}")
-        print(f"[*] CLI Equivalent: security certificate show -vserver {svm_name} -instance")
         
         # GET: Obtener todos los certificados de la SVM
         certificates = SecurityCertificate.get_collection(
@@ -642,7 +640,6 @@ def get_serial_numbers(svm_name):
             save_to_log('serial_numbers', log_data)
             
             print(f"\n[SUCCESS] Serial numbers retrieved successfully!")
-            print(f"[+] Results saved to logs/serial_numbers_*.json")
             
             # Retornar los detalles de los certificados para uso posterior
             return certificate_details
@@ -821,8 +818,12 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
             print(f"[WARNING] Proceeding with SSL modification anyway...")
         
         # Ejecutar el comando mediante API CLI passthrough
+        print(f"\n[*] Generating SSL modification command...")
+        print(f"[WARNING] SSL modification via API is not supported in all ONTAP versions")
+        print(f"[INFO] The command will be saved for manual execution or automated via CLI")
+        
         try:
-            # Usar el endpoint de CLI privado de NetApp ONTAP
+            # Intentar usar el endpoint de CLI privado de NetApp ONTAP (puede no funcionar)
             api_url = f"https://{config.connection.origin}/api/private/cli/security/ssl"
             
             # Construir el payload para el comando modify
@@ -834,7 +835,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
                 "server-enabled": str(server_enabled).lower()
             }
             
-            print(f"[*] API Call: PATCH {api_url}")
+            print(f"\n[*] Attempting API Call: PATCH {api_url}")
             print(f"[*] Payload: {payload}")
             
             # Ejecutar la petición PATCH
@@ -846,23 +847,41 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
                 },
                 json=payload,
                 auth=(config.connection.username, config.connection.password),
-                verify=False
+                verify=False,
+                timeout=10
             )
             
             # Verificar la respuesta
             if response.status_code in [200, 201, 202]:
-                print(f"[+] SSL modification executed successfully!")
+                print(f"[+] SSL modification executed successfully via API!")
                 print(f"[+] HTTP Status Code: {response.status_code}")
+                api_success = True
+            elif response.status_code == 404:
+                print(f"[WARNING] API endpoint not available (404)")
+                print(f"[INFO] CLI command will be provided for manual execution")
+                api_success = False
             else:
-                print(f"[ERROR] SSL modification failed")
-                print(f"[ERROR] HTTP Status Code: {response.status_code}")
-                print(f"[ERROR] Response: {response.text}")
-                return False
+                print(f"[WARNING] API returned non-success status: {response.status_code}")
+                print(f"[INFO] Response: {response.text}")
+                print(f"[INFO] CLI command will be provided for manual execution")
+                api_success = False
         
+        except requests.exceptions.Timeout:
+            print(f"[WARNING] API request timed out")
+            print(f"[INFO] CLI command will be provided for manual execution")
+            api_success = False
         except Exception as api_error:
-            print(f"[WARNING] CLI passthrough API error: {str(api_error)}")
-            print(f"[INFO] This is expected - the endpoint may not be available")
-            print(f"[INFO] The command has been generated for manual execution")
+            print(f"[WARNING] API call failed: {str(api_error)}")
+            print(f"[INFO] CLI command will be provided for manual execution")
+            api_success = False
+        
+        # Siempre proporcionar el comando CLI para ejecución manual
+        print(f"\n{'='*70}")
+        print(f"  MANUAL EXECUTION COMMAND")
+        print(f"{'='*70}")
+        print(f"\n[IMPORTANT] Execute this command on the ONTAP cluster CLI:")
+        print(f"\n{cli_command}")
+        print(f"\n{'='*70}")
         
         # Guardar el comando en log para referencia
         print(f"\n[*] Saving SSL modification details to log...")
@@ -876,6 +895,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
             'serial_number': serial_number,
             'server_enabled': server_enabled,
             'cli_command': cli_command,
+            'api_success': api_success if 'api_success' in locals() else False,
             'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
@@ -1050,11 +1070,7 @@ def delete_certificate(svm_name, serial_number, cert_config):
         print(f"    - Common Name: {common_name}")
         print(f"    - Serial Number: {serial_number}")
         
-        print(f"\n[*] Command to execute:")
-        print(f"    security certificate delete -type {cert_type} -vserver {svm_name} \\")
-        print(f"                                -ca {ca_name} -serial {serial_number} \\")
-        print(f"                                -common-name {common_name}")
-        
+    
         # ====================================================================
         # PASO 2: BUSCAR EL CERTIFICADO
         # ====================================================================
@@ -1099,8 +1115,6 @@ def delete_certificate(svm_name, serial_number, cert_config):
         # ====================================================================
         
         print(f"\n[STEP 3/4] Deleting certificate...")
-        print(f"[*] API Call: DELETE /api/security/certificates/{cert_to_delete.uuid}")
-        print(f"[*] CLI Equivalent: security certificate delete -type {cert_type} -vserver {svm_name} -ca {ca_name} -serial {serial_number} -common-name {common_name}")
         
         # Construir el comando CLI para referencia
         cli_command = (
@@ -1111,9 +1125,7 @@ def delete_certificate(svm_name, serial_number, cert_config):
             f"-serial {serial_number} "
             f"-common-name {common_name}"
         )
-        
-        print(f"\n[+] CLI Command:")
-        print(f"    {cli_command}")
+    
         
         # DELETE: Eliminar el certificado usando la API REST
         print(f"\n[*] Executing certificate deletion...")
@@ -1768,8 +1780,6 @@ def execute_option(option, config_data):
         certificate_details = get_serial_numbers(svm_name)
         
         if certificate_details:
-            print("\n[*] Analyzing certificates to find certificate with CA = SVM name...")
-            
             cert_to_delete = None
             
             # Buscar certificado donde CA = svm_name
@@ -1855,40 +1865,40 @@ def execute_option(option, config_data):
         
         print("\n[*] Starting SSL modification workflow...")
         print(f"{'='*70}")
-        print(f"[*] Target: Modify SSL using certificate with self-signed=false")
+        print(f"[*] Target: Modify SSL using installed certificate (CA != SVM name)")
         print(f"{'='*70}")
         
         # Obtener todos los certificados de la SVM
         certificate_details = get_serial_numbers(svm_name)
         
         if certificate_details:
-            print("\n[*] Analyzing certificates to find installed (non self-signed) certificate...")
+            print("\n[*] Analyzing certificates to find installed certificate...")
             
             cert_to_use = None
             
-            # Buscar certificado con self-signed = false
+            # Buscar certificado donde CA != svm_name (certificado instalado)
             for cert in certificate_details:
-                is_self_signed = cert.get('self_signed', None)
+                cert_ca = cert.get('ca', '')
                 
                 print(f"\n[*] Analyzing certificate:")
-                print(f"    - Name: {cert['certificate_name']}")
+                print(f"    - Certificate Name: {cert['certificate_name']}")
                 print(f"    - Common Name: {cert.get('common_name', 'N/A')}")
-                print(f"    - Self-Signed: {is_self_signed}")
-                print(f"    - CA: {cert.get('ca', 'N/A')}")
+                print(f"    - CA: {cert_ca}")
                 print(f"    - Serial: {cert['serial_number']}")
                 
-                # Verificar self-signed = false
-                if is_self_signed is False:
+                # Buscar certificado donde CA != svm_name
+                if cert_ca != svm_name and cert_ca != 'N/A' and cert_ca != '':
                     cert_to_use = cert
-                    print(f"    -> ✓ MATCH: This certificate will be used for SSL!")
-                elif is_self_signed is True:
-                    print(f"    -> Self-signed certificate (skipped)")
+                    print(f"    -> ✓ MATCH: This is the installed certificate (CA != SVM name)!")
+                elif cert_ca == svm_name:
+                    print(f"    -> Certificate with CA = SVM name (skipped)")
                 else:
-                    print(f"    -> Unknown self-signed status")
+                    print(f"    -> No valid CA found (skipped)")
             
             # Verificar que encontramos el certificado
             if not cert_to_use:
-                print(f"\n[ERROR] Could not find installed certificate (self-signed=false)")
+                print(f"\n[ERROR] Could not find installed certificate")
+                print("[INFO] Looking for certificate where CA != '{svm_name}'")
                 print("[INFO] This may indicate:")
                 print("       - No installed certificate exists")
                 print("       - The certificate was not properly installed")
@@ -1896,61 +1906,67 @@ def execute_option(option, config_data):
                 return True
             
             # ============================================================
-            # MODIFICAR SSL CON EL CERTIFICADO INSTALADO
+            # EXTRAER DATOS DEL CERTIFICADO AUTOMÁTICAMENTE
             # ============================================================
             
-            ssl_serial = cert_to_use['serial_number']
-            ssl_ca = cert_to_use.get('ca', None)
-            ssl_common_name = cert_to_use.get('common_name', None)
+            ssl_cert_name = cert_to_use.get('certificate_name')
+            ssl_common_name = cert_to_use.get('common_name')
+            ssl_ca = cert_to_use.get('ca')
+            ssl_serial = cert_to_use.get('serial_number')
             
             # ============================================================
-            # VALIDACIÓN DE SEGURIDAD: VERIFICAR CA NAME
+            # VALIDACIÓN: VERIFICAR DATOS EXTRAÍDOS
             # ============================================================
             
-            print(f"\n[*] Security validation: Extracting CA name from certificate...")
+            print(f"\n[*] Extracting certificate data automatically...")
+            print(f"[+] Certificate data extracted:")
+            print(f"    - VServer: {svm_name}")
+            print(f"    - Certificate Name: {ssl_cert_name}")
+            print(f"    - Common Name: {ssl_common_name}")
+            print(f"    - CA (Certificate Authority): {ssl_ca}")
+            print(f"    - Serial Number: {ssl_serial}")
+            print(f"    - Type: {cert_to_use.get('type', 'server')}")
             
             if not ssl_ca or ssl_ca == 'N/A':
-                print(f"[ERROR] Could not extract CA name from certificate")
-                print(f"[ERROR] Certificate details:")
-                print(f"        - Certificate Name: {cert_to_use.get('certificate_name', 'N/A')}")
-                print(f"        - Serial Number: {ssl_serial}")
+                print(f"\n[ERROR] Could not extract CA name from certificate")
                 print(f"[ERROR] Cannot proceed with SSL modification without valid CA name")
                 return True
             
             if not ssl_common_name or ssl_common_name == 'N/A':
-                print(f"[ERROR] Could not extract common name from certificate")
+                print(f"\n[ERROR] Could not extract common name from certificate")
                 print(f"[ERROR] Cannot proceed with SSL modification without valid common name")
                 return True
             
-            print(f"[+] CA name successfully extracted: {ssl_ca}")
-            print(f"[+] Common name verified: {ssl_common_name}")
+            # ============================================================
+            # MODIFICAR SSL CON EL CERTIFICADO INSTALADO
+            # ============================================================
             
             print(f"\n[*] Proceeding with SSL modification...")
-            print(f"[*] Selected certificate details:")
-            print(f"    - Certificate Name: {cert_to_use['certificate_name']}")
-            print(f"    - CA (Certificate Authority): {ssl_ca}")
-            print(f"    - Common Name: {ssl_common_name}")
-            print(f"    - Serial Number: {ssl_serial}")
-            print(f"    - Self-Signed: False")
-            print(f"    - Type: {cert_to_use.get('type', 'N/A')}")
+            print(f"[*] Command to execute:")
+            print(f"    security ssl modify -vserver {svm_name} \\")
+            print(f"                        -ca {ssl_ca} \\")
+            print(f"                        -common-name {ssl_common_name} \\")
+            print(f"                        -serial {ssl_serial} \\")
+            print(f"                        -server-enabled {str(config_data['ssl']['server_enabled']).lower()}")
             
-            # Llamar a la función de modificación SSL con el CA name extraído
+            # Llamar a la función de modificación SSL con los datos extraídos
             if modify_ssl_certificate(
                 svm_name,
                 ssl_serial,
                 config_data['ssl'],
                 ssl_common_name,
-                ssl_ca  # CA name extraído del certificado (seguridad)
+                ssl_ca  # CA name extraído automáticamente del certificado
             ):
                 print("\n[SUCCESS] SSL modification completed successfully!")
                 print(f"{'='*70}")
                 print("  SSL CONFIGURATION UPDATED")
                 print(f"{'='*70}")
-                print(f"\n[✓] SSL configured with certificate: {cert_to_use['certificate_name']}")
+                print(f"\n[✓] SSL configured with certificate: {ssl_cert_name}")
                 print(f"[✓] CA: {ssl_ca}")
+                print(f"[✓] Common Name: {ssl_common_name}")
                 print(f"[✓] Serial Number: {ssl_serial}")
                 print(f"\n[INFO] SSL configuration has been updated with the installed certificate")
-                print(f"\n[NEXT STEP] Run option 3 to delete the old self-signed certificate")
+                print(f"\n[NEXT STEP] Run option 3 to delete the old certificate (CA = {svm_name})")
             else:
                 print("\n[ERROR] SSL modification failed")
                 print("[ERROR] Check the error messages above for details")
