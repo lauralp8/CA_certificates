@@ -1522,7 +1522,7 @@ def display_menu():
     print("="*70)
     print("\n[1] Generate Certificate Signing Request (CSR)")
     print("[2] Install Signed Certificate")
-    print("[3] Modify SSL and Delete Old Certificate")
+    print("[3] Modify SSL and Delete Certificate")
     print("[0] Exit (with event logs backup)")
     print("[9] Exit without logs")
     print("\n" + "="*70)
