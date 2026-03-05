@@ -1522,8 +1522,7 @@ def display_menu():
     print("="*70)
     print("\n[1] Generate Certificate Signing Request (CSR)")
     print("[2] Install Signed Certificate")
-    print("[3] Delete Certificate (CA = SVM Name)")
-    print("[4] Modify SSL Configuration")
+    print("[3] Modify SSL and Delete Old Certificate")
     print("[0] Exit (with event logs backup)")
     print("[9] Exit without logs")
     print("\n" + "="*70)
@@ -1580,94 +1579,7 @@ def execute_option(option, config_data):
         return True
     
     elif option == "3":
-        # DELETE CERTIFICATE WHERE CA = SVM NAME
-        if 'svm' not in config_data or 'name' not in config_data['svm']:
-            print("\n[ERROR] No SVM name found in config.yaml")
-            print("[ERROR] Add 'name' field in the 'svm' section")
-            return True
-        
-        svm_name = config_data['svm']['name']
-        
-        print("\n[*] Starting certificate deletion workflow...")
-        print(f"{'='*70}")
-        print(f"[*] Target: Delete certificate where CA = {svm_name}")
-        print(f"{'='*70}")
-        
-        # Obtener todos los certificados de la SVM
-        certificate_details = get_serial_numbers(svm_name)
-        
-        if certificate_details:
-            cert_to_delete = None
-            
-            # Buscar certificado donde CA = svm_name
-            for cert in certificate_details:
-                cert_ca = cert.get('ca', '')
-                
-                print(f"\n[*] Analyzing certificate:")
-                print(f"    - Name: {cert['certificate_name']}")
-                print(f"    - Common Name: {cert.get('common_name', 'N/A')}")
-                print(f"    - CA: {cert_ca}")
-                print(f"    - Serial: {cert['serial_number']}")
-                
-                # Verificar si CA = svm_name
-                if cert_ca == svm_name:
-                    cert_to_delete = cert
-                    print(f"    -> ✓ MATCH: CA matches SVM name, this certificate will be deleted!")
-                else:
-                    print(f"    -> CA doesn't match SVM name (skipped)")
-            
-            # Verificar que encontramos el certificado
-            if not cert_to_delete:
-                print(f"\n[WARNING] Could not find certificate with CA = '{svm_name}'")
-                print("[INFO] This may indicate:")
-                print("       - The certificate was already deleted")
-                print("       - No certificate exists with CA matching the SVM name")
-                return True
-            
-            # ============================================================
-            # ELIMINAR EL CERTIFICADO
-            # ============================================================
-            
-            delete_serial = cert_to_delete['serial_number']
-            
-            print(f"\n[*] Proceeding with certificate deletion...")
-            print(f"[*] Certificate to delete:")
-            print(f"    - Type: server")
-            print(f"    - VServer: {svm_name}")
-            print(f"    - CA: {svm_name}")
-            print(f"    - Common Name: {svm_name}")
-            print(f"    - Serial Number: {delete_serial}")
-            print(f"    - Certificate Name: {cert_to_delete['certificate_name']}")
-            
-            # Preparar configuración para delete_certificate
-            # Parámetros: type=server, vserver=svm_name, ca=svm_name, serial=serial, common-name=svm_name
-            delete_config = {
-                'type': 'server',
-                'common_name': svm_name,
-                'ca_name': svm_name
-            }
-            
-            # Llamar a la función de eliminación de certificado
-            if delete_certificate(svm_name, delete_serial, delete_config):
-                print("\n[SUCCESS] Certificate deletion completed!")
-                print(f"{'='*70}")
-                print("  CERTIFICATE DELETED SUCCESSFULLY")
-                print(f"{'='*70}")
-                print(f"\n[✓] Certificate deleted: {cert_to_delete['certificate_name']}")
-                print(f"[✓] Serial Number: {delete_serial}")
-                print(f"[✓] CA: {svm_name}")
-                print(f"\n[INFO] The certificate has been removed from the system")
-            else:
-                print("\n[ERROR] Certificate deletion failed")
-                print("[ERROR] Check the error messages above for details")
-        else:
-            print("\n[WARNING] No certificates found or error occurred")
-            print("[INFO] Check the error messages above for details")
-        
-        return True
-    
-    elif option == "4":
-        # MODIFY SSL CONFIGURATION
+        # MODIFY SSL AND DELETE OLD CERTIFICATE
         if 'svm' not in config_data or 'name' not in config_data['svm']:
             print("\n[ERROR] No SVM name found in config.yaml")
             return True
@@ -1679,59 +1591,107 @@ def execute_option(option, config_data):
         svm_name = config_data['svm']['name']
         
         print(f"\n{'='*70}")
-        print(f"[*] SSL Modification - Target SVM: {svm_name}")
+        print(f"[*] SSL Modification & Certificate Cleanup - SVM: {svm_name}")
         print(f"{'='*70}")
         
         # Obtener certificados
         certificate_details = get_serial_numbers(svm_name)
         
-        if certificate_details:
-            cert_to_use = None
+        if not certificate_details:
+            print("\n[ERROR] No certificates found")
+            return True
+        
+        # ============================================================
+        # PASO 1: MODIFICAR SSL CON CERTIFICADO INSTALADO
+        # ============================================================
+        
+        print(f"\n[STEP 1/2] Modifying SSL configuration...")
+        
+        cert_to_use = None
+        cert_to_delete = None
+        
+        # Buscar certificado instalado (CA != svm_name) y certificado antiguo (CA = svm_name)
+        for cert in certificate_details:
+            cert_ca = cert.get('ca', '')
             
-            # Buscar certificado instalado (CA != svm_name)
-            for cert in certificate_details:
-                cert_ca = cert.get('ca', '')
-                
-                if cert_ca != svm_name and cert_ca != 'N/A' and cert_ca != '':
-                    cert_to_use = cert
-                    print(f"\n[*] Found certificate:")
-                    print(f"    Name: {cert['certificate_name']}")
-                    print(f"    CA: {cert_ca}")
-                    print(f"    CN: {cert.get('common_name', 'N/A')}")
-                    print(f"    Serial: {cert['serial_number']}")
-                    break
-            
-            if not cert_to_use:
-                print(f"\n[ERROR] No installed certificate found (CA != {svm_name})")
-                print("[INFO] Run option 2 to install a certificate first")
-                return True
-            
-            # Extraer datos del certificado
-            ssl_common_name = cert_to_use.get('common_name')
-            ssl_ca = cert_to_use.get('ca')
-            ssl_serial = cert_to_use.get('serial_number')
-            
-            if not ssl_ca or ssl_ca == 'N/A':
-                print(f"\n[ERROR] Invalid CA name in certificate")
-                return True
-            
-            if not ssl_common_name or ssl_common_name == 'N/A':
-                print(f"\n[ERROR] Invalid common name in certificate")
-                return True
-            
-            # Modificar SSL
-            if modify_ssl_certificate(
-                svm_name,
-                ssl_serial,
-                config_data['ssl'],
-                ssl_common_name,
-                ssl_ca
-            ):
-                print(f"\n[INFO] Next: Run option 3 to delete old certificate (CA = {svm_name})")
-            else:
-                print("\n[ERROR] SSL modification failed")
+            if cert_ca != svm_name and cert_ca != 'N/A' and cert_ca != '':
+                cert_to_use = cert
+            elif cert_ca == svm_name:
+                cert_to_delete = cert
+        
+        # Validar que existe certificado instalado
+        if not cert_to_use:
+            print(f"\n[ERROR] No installed certificate found (CA != {svm_name})")
+            print("[INFO] Run option 2 to install a certificate first")
+            return True
+        
+        print(f"\n[*] Using certificate:")
+        print(f"    Name: {cert_to_use['certificate_name']}")
+        print(f"    CA: {cert_to_use.get('ca')}")
+        print(f"    CN: {cert_to_use.get('common_name', 'N/A')}")
+        print(f"    Serial: {cert_to_use['serial_number']}")
+        
+        # Extraer datos del certificado
+        ssl_common_name = cert_to_use.get('common_name')
+        ssl_ca = cert_to_use.get('ca')
+        ssl_serial = cert_to_use.get('serial_number')
+        
+        if not ssl_ca or ssl_ca == 'N/A':
+            print(f"\n[ERROR] Invalid CA name in certificate")
+            return True
+        
+        if not ssl_common_name or ssl_common_name == 'N/A':
+            print(f"\n[ERROR] Invalid common name in certificate")
+            return True
+        
+        # Modificar SSL
+        ssl_success = modify_ssl_certificate(
+            svm_name,
+            ssl_serial,
+            config_data['ssl'],
+            ssl_common_name,
+            ssl_ca
+        )
+        
+        if not ssl_success:
+            print("\n[ERROR] SSL modification failed - Aborting")
+            return True
+        
+        # ============================================================
+        # PASO 2: ELIMINAR CERTIFICADO ANTIGUO (CA = SVM NAME)
+        # ============================================================
+        
+        print(f"\n[STEP 2/2] Deleting old certificate...")
+        
+        if not cert_to_delete:
+            print(f"\n[INFO] No old certificate found with CA = {svm_name}")
+            print("[INFO] Nothing to delete - Process completed")
+            return True
+        
+        print(f"\n[*] Old certificate to delete:")
+        print(f"    Name: {cert_to_delete['certificate_name']}")
+        print(f"    CA: {svm_name}")
+        print(f"    Serial: {cert_to_delete['serial_number']}")
+        
+        delete_serial = cert_to_delete['serial_number']
+        
+        # Preparar configuración para delete_certificate
+        delete_config = {
+            'type': 'server',
+            'common_name': svm_name,
+            'ca_name': svm_name
+        }
+        
+        # Llamar a la función de eliminación de certificado
+        if delete_certificate(svm_name, delete_serial, delete_config):
+            print(f"\n{'='*70}")
+            print("  PROCESS COMPLETED SUCCESSFULLY")
+            print(f"{'='*70}")
+            print(f"\n[✓] SSL configuration updated with certificate: {cert_to_use['certificate_name']}")
+            print(f"[✓] Old certificate deleted: {cert_to_delete['certificate_name']}")
         else:
-            print("\n[WARNING] No certificates found or error occurred")
+            print("\n[WARNING] SSL updated but certificate deletion failed")
+            print("[INFO] You may need to manually delete the old certificate")
         
         return True
     
