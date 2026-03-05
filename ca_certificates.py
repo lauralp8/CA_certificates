@@ -770,7 +770,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
             response_show = requests.get(
                 api_url_show,
                 headers={"Accept": "application/json"},
-                params={"vserver": svm_name, "fields": "*"},
+                params={"vserver": svm_name},
                 auth=(config.CONNECTION.username, config.CONNECTION.password),
                 verify=False
             )
@@ -796,16 +796,15 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
         # MODIFICACIÓN SSL VIA API PRIVADA CLI
         # ====================================================================
         
-        # Construir el payload para la API CLI
+        # Construir el payload para la API CLI (vserver va como query param)
         api_url = f"{config.CONNECTION.origin}/api/private/cli/security/ssl"
         
-        # Intentar PATCH con diferentes variantes del parámetro
+        # Payload sin vserver (va en query params)
         payload = {
-            "vserver": svm_name,
             "ca": ca_name,
             "common_name": common_name,
             "serial": serial_number,
-            "server_enabled": server_enabled  # Intentar primero con boolean
+            "server_enabled": server_enabled
         }
         
         print(f"\n[DEBUG] Attempting PATCH with payload:")
@@ -818,6 +817,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
                     "Accept": "application/json",
                     "Content-Type": "application/json"
                 },
+                params={"vserver": svm_name},
                 json=payload,
                 auth=(config.CONNECTION.username, config.CONNECTION.password),
                 verify=False
@@ -863,7 +863,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
             response_verify = requests.get(
                 api_url_verify,
                 headers={"Accept": "application/json"},
-                params={"vserver": svm_name, "fields": "*"},
+                params={"vserver": svm_name},
                 auth=(config.CONNECTION.username, config.CONNECTION.password),
                 verify=False
             )
