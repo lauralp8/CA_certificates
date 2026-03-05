@@ -750,65 +750,21 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
                 print(f"[ERROR] Error extracting CA name: {str(extract_error)}")
                 return False
         
-        print(f"\n[*] Parameters:")
-        print(f"    SVM: {svm_name}")
+        print(f"\n[*] Modifying SSL configuration...")
         print(f"    CA: {ca_name}")
         print(f"    Common Name: {common_name}")
         print(f"    Serial: {serial_number}")
         print(f"    Server Enabled: {server_enabled}")
         
-        # ====================================================================
-        # DEBUG: GET SSL SHOW PARA VER LA ESTRUCTURA EXACTA DE LA API
-        # ====================================================================
-        
-        print(f"\n[DEBUG] Getting current SSL configuration from API...")
-        
-        try:
-            # Intentar obtener configuración SSL actual
-            api_url_show = f"{config.CONNECTION.origin}/api/private/cli/security/ssl"
-            
-            response_show = requests.get(
-                api_url_show,
-                headers={"Accept": "application/json"},
-                params={"vserver": svm_name},
-                auth=(config.CONNECTION.username, config.CONNECTION.password),
-                verify=False
-            )
-            
-            print(f"[DEBUG] GET Response Status: {response_show.status_code}")
-            
-            if response_show.status_code == 200:
-                ssl_data = response_show.json()
-                print(f"\n[DEBUG] SSL Show API Response (Full JSON):")
-                print(f"{json.dumps(ssl_data, indent=2)}")
-                
-                # Guardar en log para análisis
-                save_to_log('security_ssl_show', ssl_data)
-                print(f"\n[DEBUG] SSL data saved to logs/security_ssl_show_*.json")
-            else:
-                print(f"[WARNING] Could not retrieve SSL config: {response_show.status_code}")
-                print(f"[DEBUG] Response: {response_show.text}")
-        
-        except Exception as debug_error:
-            print(f"[WARNING] Debug GET failed: {str(debug_error)}")
-        
-        # ====================================================================
-        # MODIFICACIÓN SSL VIA API PRIVADA CLI
-        # ====================================================================
-        
-        # Construir el payload para la API CLI (vserver va como query param)
+        # Modificar SSL via API privada CLI
         api_url = f"{config.CONNECTION.origin}/api/private/cli/security/ssl"
         
-        # Payload sin vserver (va en query params)
         payload = {
             "ca": ca_name,
             "common_name": common_name,
             "serial": serial_number,
             "server_enabled": server_enabled
         }
-        
-        print(f"\n[DEBUG] Attempting PATCH with payload:")
-        print(f"{json.dumps(payload, indent=2)}")
         
         try:
             response = requests.patch(
@@ -823,18 +779,15 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
                 verify=False
             )
             
-            print(f"\n[DEBUG] PATCH Response Status: {response.status_code}")
-            print(f"[DEBUG] PATCH Response: {response.text}")
-            
             if response.status_code in [200, 202, 204]:
-                print(f"\n[SUCCESS] SSL modification successful via API")
                 api_success = True
             else:
-                print(f"\n[WARNING] API PATCH failed with status {response.status_code}")
+                print(f"\n[ERROR] API returned status {response.status_code}")
+                print(f"[ERROR] Response: {response.text}")
                 api_success = False
                 
         except Exception as patch_error:
-            print(f"[WARNING] PATCH request failed: {str(patch_error)}")
+            print(f"\n[ERROR] Request failed: {str(patch_error)}")
             api_success = False
         
         # Guardar log
@@ -851,47 +804,13 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
         
         save_to_log('ssl_modify', ssl_modify_log)
         
-        # ====================================================================
-        # VERIFICACIÓN POST-MODIFICACIÓN
-        # ====================================================================
-        
-        print(f"\n[*] Verifying SSL configuration after modification...")
-        
-        try:
-            api_url_verify = f"{config.CONNECTION.origin}/api/private/cli/security/ssl"
-            
-            response_verify = requests.get(
-                api_url_verify,
-                headers={"Accept": "application/json"},
-                params={"vserver": svm_name},
-                auth=(config.CONNECTION.username, config.CONNECTION.password),
-                verify=False
-            )
-            
-            if response_verify.status_code == 200:
-                ssl_data_verify = response_verify.json()
-                print(f"\n[DEBUG] SSL Show After Modification:")
-                print(f"{json.dumps(ssl_data_verify, indent=2)}")
-                
-                if 'records' in ssl_data_verify and len(ssl_data_verify['records']) > 0:
-                    ssl_record = ssl_data_verify['records'][0]
-                    print(f"\n[*] SSL Configuration:")
-                    print(f"    CA: {ssl_record.get('ca', 'N/A')}")
-                    print(f"    Common Name: {ssl_record.get('common_name', 'N/A')}")
-                    print(f"    Serial: {ssl_record.get('serial', 'N/A')}")
-                    print(f"    Server Enabled: {ssl_record.get('server_enabled', 'N/A')}")
-            else:
-                print(f"[WARNING] Verification GET failed: {response_verify.status_code}")
-                
-        except Exception as verify_error:
-            print(f"[WARNING] Verification failed: {str(verify_error)}")
-        
-        print(f"\n{'='*70}")
+        # Verificar resultado
         if api_success:
-            print(f"[SUCCESS] SSL modification completed")
+            print(f"\n{'='*70}")
+            print(f"[SUCCESS] SSL configuration updated")
+            print(f"{'='*70}")
         else:
-            print(f"[WARNING] SSL modification may have failed - check debug output above")
-        print(f"{'='*70}")
+            print(f"\n[ERROR] SSL modification failed")
         
         return api_success
     
@@ -1788,7 +1707,6 @@ def execute_option(option, config_data):
                 return True
             
             # Extraer datos del certificado
-            ssl_cert_name = cert_to_use.get('certificate_name')
             ssl_common_name = cert_to_use.get('common_name')
             ssl_ca = cert_to_use.get('ca')
             ssl_serial = cert_to_use.get('serial_number')
@@ -1811,7 +1729,7 @@ def execute_option(option, config_data):
             ):
                 print(f"\n[INFO] Next: Run option 3 to delete old certificate (CA = {svm_name})")
             else:
-                print("\n[ERROR] SSL modification failed - check debug output above")
+                print("\n[ERROR] SSL modification failed")
         else:
             print("\n[WARNING] No certificates found or error occurred")
         
