@@ -765,13 +765,13 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
         
         try:
             # Intentar obtener configuración SSL actual
-            api_url_show = f"https://{config.connection.origin}/api/private/cli/security/ssl"
+            api_url_show = f"https://{config.CONNECTION.origin}/api/private/cli/security/ssl"
             
             response_show = requests.get(
                 api_url_show,
                 headers={"Accept": "application/json"},
                 params={"vserver": svm_name, "fields": "*"},
-                auth=(config.connection.username, config.connection.password),
+                auth=(config.CONNECTION.username, config.CONNECTION.password),
                 verify=False
             )
             
@@ -797,7 +797,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
         # ====================================================================
         
         # Construir el payload para la API CLI
-        api_url = f"https://{config.connection.origin}/api/private/cli/security/ssl"
+        api_url = f"https://{config.CONNECTION.origin}/api/private/cli/security/ssl"
         
         # Intentar PATCH con diferentes variantes del parámetro
         payload = {
@@ -819,7 +819,7 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
                     "Content-Type": "application/json"
                 },
                 json=payload,
-                auth=(config.connection.username, config.connection.password),
+                auth=(config.CONNECTION.username, config.CONNECTION.password),
                 verify=False
             )
             
@@ -858,13 +858,13 @@ def modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_
         print(f"\n[*] Verifying SSL configuration after modification...")
         
         try:
-            api_url_verify = f"https://{config.connection.origin}/api/private/cli/security/ssl"
+            api_url_verify = f"https://{config.CONNECTION.origin}/api/private/cli/security/ssl"
             
             response_verify = requests.get(
                 api_url_verify,
                 headers={"Accept": "application/json"},
                 params={"vserver": svm_name, "fields": "*"},
-                auth=(config.connection.username, config.connection.password),
+                auth=(config.CONNECTION.username, config.CONNECTION.password),
                 verify=False
             )
             
