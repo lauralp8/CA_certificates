@@ -1,16 +1,16 @@
 # NetApp ONTAP Certificate Management Script
 
-Script automatizado para la gestión completa de certificados digitales (CSR, instalación, modificación SSL y eliminación) en NetApp ONTAP usando la API REST oficial.
+Script automatizado para la gestión completa de certificados digitales en NetApp ONTAP usando la API REST oficial. Automatiza el workflow completo: generación de CSR, instalación de certificados firmados, actualización de configuración SSL y limpieza de certificados antiguos.
 
 ## Descripción
 
-Este script de Python automatiza todo el proceso de gestión de certificados digitales en NetApp ONTAP, incluyendo:
+Este script de Python automatiza todo el ciclo de vida de gestión de certificados digitales en NetApp ONTAP, incluyendo:
 
 - Generación de Certificate Signing Request (CSR) con par de claves
 - Instalación de certificados firmados por CA
+- Modificación automática de configuración SSL con certificado instalado
+- Eliminación automática de certificados obsoletos (workflow combinado)
 - Consulta de serial numbers de certificados instalados
-- Modificación de configuración SSL
-- Eliminación de certificados obsoletos
 - Backup automático de event logs del cluster
 - Sistema de logging con timestamp para todas las operaciones
 
@@ -85,7 +85,6 @@ Configuración del certificado digital:
 
 ### ssl
 Configuración SSL:
-- `ca_name`: Nombre de la CA
 - `server_enabled`: Habilitar/deshabilitar servidor SSL (true/false)
 
 Para ver ejemplos de configuración, consulta el archivo `config.yaml` incluido en el proyecto.
@@ -119,25 +118,20 @@ El script implementa un sistema de logging automático que captura datos REALES 
 
 4. **ssl_modify_YYYYMMDD_HHMMSS.json**
    - Configuración SSL modificada
-   - Comando CLI generado
-   - Parámetros aplicados
+   - Parámetros aplicados (ca, common_name, serial, server_enabled)
+   - Estado de la operación (api_success)
 
 5. **certificate_delete_YYYYMMDD_HHMMSS.json**
    - Certificado eliminado
    - Serial number, tipo, CA
    - Certificados restantes
 
-6. **security_login_show_YYYYMMDD_HHMMSS.json**
-   - Información de acceso de seguridad
-   - Usuarios y métodos de autenticación
-   - Generado después de modificar SSL
-
-7. **security_ssl_show_YYYYMMDD_HHMMSS.json**
-   - Configuración SSL actual
+6. **security_ssl_show_YYYYMMDD_HHMMSS.json** (opcional, solo en debug)
+   - Configuración SSL actual desde la API
    - Certificados asociados a SSL
-   - Generado después de modificar SSL
+   - Generado durante troubleshooting
 
-8. **event_logs_YYYYMMDD_HHMMSS.json**
+7. **event_logs_YYYYMMDD_HHMMSS.json**
    - Backup de eventos del cluster (últimos 100)
    - Index, timestamp, nodo, severidad, evento
 
@@ -159,7 +153,7 @@ El script presenta un menú con las siguientes opciones:
 
 [1] Generate Certificate Signing Request (CSR)
 [2] Install Signed Certificate
-[3] Get Serial Numbers, Modify SSL & Delete Old Certificate
+[3] Modify SSL and Delete Old Certificate
 [0] Exit (with event logs backup)
 [9] Exit without logs
 
@@ -183,12 +177,30 @@ El script presenta un menú con las siguientes opciones:
 5. **Instalación** - POST a API REST de ONTAP → Guarda log
 6. **Verificación** - Consulta certificado instalado y muestra detalles
 
-### Flujo de Ejecución - Opción 3: Workflow Completo
+### Flujo de Ejecución - Opción 3: Modificar SSL y Eliminar Certificado Antiguo
 
-1. **Obtener serial numbers** - Consulta todos los certificados → Guarda log
-2. **Modificar SSL** - Configura SSL con segundo certificado → Guarda log
-3. **Eliminar certificado antiguo** - Borra primer certificado → Guarda log
-4. **Mostrar resultados** - Despliega security login show y security ssl show
+**Workflow Automático Completo en 2 Pasos:**
+
+#### PASO 1: Modificar SSL
+1. **Obtener certificados** - Consulta todos los certificados de la SVM
+2. **Identificar certificados** - Busca certificado instalado (CA ≠ nombre_SVM) y certificado antiguo (CA = nombre_SVM)
+3. **Validar certificado** - Verifica que existe certificado instalado con CA válido
+4. **Extraer parámetros** - Obtiene CA, Common Name y Serial del certificado
+5. **Modificar SSL** - Configura SSL con certificado instalado vía API privada CLI → Guarda log
+6. **Verificar éxito** - Si falla, aborta el proceso antes de eliminar
+
+#### PASO 2: Eliminar Certificado Antiguo
+1. **Verificar existencia** - Confirma que existe certificado con CA = nombre_SVM
+2. **Preparar eliminación** - Configura parámetros (type, ca_name, common_name, serial)
+3. **Eliminar certificado** - DELETE a API REST de ONTAP → Guarda log
+4. **Confirmar resultado** - Muestra resumen del proceso completo
+
+**Ventajas del Workflow Combinado:**
+- Proceso automatizado sin intervención manual
+- Validación en cada paso para evitar errores
+- Si falla SSL, no elimina el certificado antiguo (seguridad)
+- Logs detallados de ambas operaciones
+- Resultado final consolidado
 
 ## API REST de NetApp
 
@@ -201,6 +213,10 @@ Este script utiliza la **API REST oficial de NetApp ONTAP**:
 ### Endpoints GET (Consulta)
 - **GET** `/api/security/certificates` - Consulta de certificados
 - **GET** `/api/support/ems/events` - Consulta de event logs
+- **GET** `/api/private/cli/security/ssl` - Consulta de configuración SSL (API privada CLI)
+
+### Endpoints PATCH (Modificación)
+- **PATCH** `/api/private/cli/security/ssl` - Modificación de configuración SSL (API privada CLI)
 
 ### Endpoints DELETE (Eliminación)
 - **DELETE** `/api/security/certificates/{uuid}` - Eliminación de certificado
@@ -252,11 +268,12 @@ Obtiene y muestra los serial numbers de todos los certificados de una SVM.
 - **GET**: `/api/security/certificates?svm.name={svm_name}`
 - **Log**: `serial_numbers_YYYYMMDD_HHMMSS.json`
 
-#### modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name)
-Modifica la configuración SSL de un certificado en ONTAP.
-- **Entrada**: Nombre SVM, serial number, configuración SSL, common name
+#### modify_ssl_certificate(svm_name, serial_number, ssl_config, common_name, ca_name=None)
+Modifica la configuración SSL de un certificado en ONTAP usando la API privada CLI.
+- **Entrada**: Nombre SVM, serial number, configuración SSL, common name, ca_name (opcional)
 - **Salida**: True si modificación exitosa, False si error
-- **Operación**: Genera comando CLI para modificación SSL
+- **PATCH**: `/api/private/cli/security/ssl` - API privada CLI
+- **Extracción automática**: Si no se proporciona ca_name, lo extrae del certificado
 - **Log**: `ssl_modify_YYYYMMDD_HHMMSS.json`
 
 #### delete_certificate(svm_name, serial_number, cert_config)
@@ -449,10 +466,31 @@ Ejecuta la opción seleccionada del menú.
 
 #### ERR-502: Configuración SSL incompleta
 ```
-[ERROR] Missing required fields in config.yaml under 'ssl' section
+[ERROR] Missing 'server_enabled' in config.yaml
 ```
-**Causa**: Faltan campos ca_name o server_enabled  
-**Solución**: Agregar campos requeridos en sección ssl de config.yaml
+**Causa**: Falta campo server_enabled en sección ssl  
+**Solución**: Agregar campo server_enabled en sección ssl de config.yaml
+
+#### ERR-503: No se encontró certificado instalado
+```
+[ERROR] No installed certificate found (CA != SVM_name)
+```
+**Causa**: No existe certificado con CA diferente al nombre de la SVM  
+**Solución**: Ejecutar opción 2 para instalar un certificado firmado por CA primero
+
+#### ERR-504: Error en extracción de CA
+```
+[ERROR] Could not extract CA name from certificate
+```
+**Causa**: El certificado no tiene información de CA válida  
+**Solución**: Verificar que el certificado está correctamente instalado con todos sus atributos
+
+#### ERR-505: API PATCH falló
+```
+[ERROR] API returned status 400
+```
+**Causa**: Parámetros incorrectos en la solicitud PATCH a la API privada CLI  
+**Solución**: Verificar que los parámetros (ca, common_name, serial) son correctos
 
 ### Errores de Eliminación de Certificados
 
@@ -510,6 +548,6 @@ Para problemas relacionados con la API de NetApp, consulta:
 
 ---
 
-**Versión**: 1.0  
-**Última actualización**: Febrero 2026  
+**Versión**: 2.0  
+**Última actualización**: Marzo 2026  
 **Compatible con**: ONTAP 9.6+
